@@ -10,7 +10,7 @@ The bridge interacts with [Balancer](https://docs.balancer.fi/).
 
 ## What is the flow of the bridge?
 
-There are one flow of Balancer operations
+There are one flow of Balancer operations.
 
 ![Balancer Flows](./BalancerBridge.svg)
 
