@@ -2,7 +2,7 @@
 
 ## What does the bridge do? Why build it?
 
-The bridge zaps `eth` or `wEth` to get the output `LPToken` for a given pool with `_joinOrExit`.
+The bridge swaps `eth` or `wEth` to get the output `LPToken` for a given pool with `_joinOrExit`.
 
 ## What protocol(s) does the bridge interact with ?
 
@@ -14,7 +14,7 @@ There are one flow of Balancer operations.
 
 ![Balancer Flows](./BalancerBridge.svg)
 
-### Zap to Increase / Decrease Liquidity
+### BatchSwap to Increase / Decrease Liquidity
 
 If the bridge receives `eth` or `wEth` as the input token it will zap it on balancer for the given proportion of `LPToken` for a given pool.
 
