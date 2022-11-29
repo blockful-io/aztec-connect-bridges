@@ -2,7 +2,7 @@
 
 ## What does the bridge do? Why build it?
 
-The bridge swaps `eth` or `wEth` to get the output `LPToken` for a given pool with `_joinOrExit`.
+The bridge swaps `eth` or `wEth` to get the output `LPToken` for a given pool.
 
 ## What protocol(s) does the bridge interact with ?
 
@@ -36,7 +36,7 @@ For the most up-to-date protocol fee data, we must call the `getSwapFeePercentag
 
 - The bridge is [synchronous](https://docs.aztec.network/how-aztec-works/aztec-connect/technical-intro#async-flow-explainer), and will always return `isAsync = false`.
 
-- The Bridge perform token pre-approvals to allow the `ROLLUP_PROCESSOR` and `ZAP` to pull tokens from it.
+- The Bridge perform token pre-approvals to allow the `ROLLUP_PROCESSOR` and `BATCH_SWAP` to pull tokens from it.
   This is to reduce gas-overhead when performing the actions. It is safe to do, as the bridge is not holding the funds itself.
 
 ## Can tokens balances be impacted by external parties, if yes, how?
