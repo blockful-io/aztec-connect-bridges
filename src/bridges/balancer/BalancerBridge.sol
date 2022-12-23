@@ -14,7 +14,7 @@ import {BridgeBase} from "../base/BridgeBase.sol";
  * @dev This bridge demonstrates the flow of assets in the convert function. This bridge simply returns what has been
  *      sent to it.
  */
-contract ExampleBridge is BridgeBase {
+contract BalancerBridge is BridgeBase {
     /**
      * @notice Set address of rollup processor
      * @param _rollupProcessor Address of rollup processor
