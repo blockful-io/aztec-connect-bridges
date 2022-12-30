@@ -3,16 +3,19 @@
 pragma solidity >=0.8.4;
 
 import {BaseDeployment} from "../base/BaseDeployment.s.sol";
-import {ExampleBridge} from "../../bridges/example/ExampleBridge.sol";
+import {BalancerBridge} from "../../bridges/balancer/BalancerBridge.sol";
 
-contract ExampleDeployment is BaseDeployment {
+contract BalancerDeployment is BaseDeployment {
+    address public constant balancerVault = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address public constant bbausd = 0xA13a9247ea42D743238089903570127DdA72fE44;
+    
     function deploy() public returns (address) {
-        emit log("Deploying example bridge");
+        emit log("Deploying balancer bridge");
 
         vm.broadcast();
-        ExampleBridge bridge = new ExampleBridge(ROLLUP_PROCESSOR);
+        BalancerBridge bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), balancerVault, bbausd);
 
-        emit log_named_address("Example bridge deployed to", address(bridge));
+        emit log_named_address("balancer bridge deployed to", address(bridge));
 
         return address(bridge);
     }
@@ -20,6 +23,6 @@ contract ExampleDeployment is BaseDeployment {
     function deployAndList() public {
         address bridge = deploy();
         uint256 addressId = listBridge(bridge, 250000);
-        emit log_named_uint("Example bridge address id", addressId);
+        emit log_named_uint("balancer bridge address id", addressId);
     }
 }

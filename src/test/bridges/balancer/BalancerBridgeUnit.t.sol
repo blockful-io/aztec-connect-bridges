@@ -5,19 +5,21 @@ pragma solidity >=0.8.4;
 import {BridgeTestBase} from "./../../aztec/base/BridgeTestBase.sol";
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 
-// Example-specific imports
+// balancer-specific imports
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ExampleBridge} from "../../../bridges/example/ExampleBridge.sol";
+import {BalancerBridge} from "../../../bridges/balancer/BalancerBridge.sol";
 import {ErrorLib} from "../../../bridges/base/ErrorLib.sol";
 
 // @notice The purpose of this test is to directly test convert functionality of the bridge.
-contract ExampleUnitTest is BridgeTestBase {
+contract BalancerBridgeUnitTest is BridgeTestBase {
     address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address public constant balancerVault = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address public constant bbausd = 0xA13a9247ea42D743238089903570127DdA72fE44;
     address private constant BENEFICIARY = address(11);
 
     address private rollupProcessor;
-    // The reference to the example bridge
-    ExampleBridge private bridge;
+    // The reference to the balancer bridge
+    BalancerBridge private bridge;
 
     // @dev This method exists on RollupProcessor.sol. It's defined here in order to be able to receive ETH like a real
     //      rollup processor would.
@@ -27,15 +29,15 @@ contract ExampleUnitTest is BridgeTestBase {
         // In unit tests we set address of rollupProcessor to the address of this test contract
         rollupProcessor = address(this);
 
-        // Deploy a new example bridge
-        bridge = new ExampleBridge(rollupProcessor);
+        // Deploy a new balancer bridge
+        bridge = new BalancerBridge(rollupProcessor, balancerVault, bbausd);
 
         // Set ETH balance of bridge and BENEFICIARY to 0 for clarity (somebody sent ETH to that address on mainnet)
         vm.deal(address(bridge), 0);
         vm.deal(BENEFICIARY, 0);
 
-        // Use the label cheatcode to mark the address with "Example Bridge" in the traces
-        vm.label(address(bridge), "Example Bridge");
+        // Use the label cheatcode to mark the address with "balancer Bridge" in the traces
+        vm.label(address(bridge), "Balancer Bridge");
 
         // Subsidize the bridge when used with Dai and register a beneficiary
         AztecTypes.AztecAsset memory daiAsset = ROLLUP_ENCODER.getRealAztecAsset(DAI);
@@ -66,13 +68,13 @@ contract ExampleUnitTest is BridgeTestBase {
         bridge.convert(inputAssetA, emptyAsset, emptyAsset, emptyAsset, 0, 0, 0, address(0));
     }
 
-    function testExampleBridgeUnitTestFixed() public {
-        testExampleBridgeUnitTest(10 ether);
+    function testBalancerBridgeUnitTestFixed() public {
+        testBalancerBridgeUnitTest(10 ether);
     }
 
     // @notice The purpose of this test is to directly test convert functionality of the bridge.
     // @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.
-    function testExampleBridgeUnitTest(uint96 _depositAmount) public {
+    function testBalancerBridgeUnitTest(uint96 _depositAmount) public {
         vm.warp(block.timestamp + 1 days);
 
         // Define input and output assets
@@ -92,11 +94,11 @@ contract ExampleUnitTest is BridgeTestBase {
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.convert(
             inputAssetA, // _inputAssetA - definition of an input asset
             emptyAsset, // _inputAssetB - not used so can be left empty
-            outputAssetA, // _outputAssetA - in this example equal to input asset
+            outputAssetA, // _outputAssetA - in this balancer equal to input asset
             emptyAsset, // _outputAssetB - not used so can be left empty
             _depositAmount, // _totalInputValue - an amount of input asset A sent to the bridge
             0, // _interactionNonce
-            0, // _auxData - not used in the example bridge
+            0, // _auxData - not used in the balancer bridge
             BENEFICIARY // _rollupBeneficiary - address, the subsidy will be sent to
         );
 

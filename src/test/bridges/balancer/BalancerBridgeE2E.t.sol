@@ -5,35 +5,37 @@ pragma solidity >=0.8.4;
 import {BridgeTestBase} from "./../../aztec/base/BridgeTestBase.sol";
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 
-// Example-specific imports
+// balancer-specific imports
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ExampleBridge} from "../../../bridges/example/ExampleBridge.sol";
+import {BalancerBridge} from "../../../bridges/balancer/BalancerBridge.sol";
 import {ErrorLib} from "../../../bridges/base/ErrorLib.sol";
 
 /**
  * @notice The purpose of this test is to test the bridge in an environment that is as close to the final deployment
  *         as possible without spinning up all the rollup infrastructure (sequencer, proof generator etc.).
  */
-contract ExampleE2ETest is BridgeTestBase {
+contract BalancerBridgeE2ETest is BridgeTestBase {
     address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address public constant balancerVault = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address public constant bbausd = 0xA13a9247ea42D743238089903570127DdA72fE44;
     address private constant BENEFICIARY = address(11);
 
-    // The reference to the example bridge
-    ExampleBridge internal bridge;
-    // To store the id of the example bridge after being added
+    // The reference to the balancer bridge
+    BalancerBridge internal bridge;
+    // To store the id of the balancer bridge after being added
     uint256 private id;
 
     function setUp() public {
-        // Deploy a new example bridge
-        bridge = new ExampleBridge(address(ROLLUP_PROCESSOR));
+        // Deploy a new balancer bridge
+        bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), balancerVault, bbausd);
 
-        // Use the label cheatcode to mark the address with "Example Bridge" in the traces
-        vm.label(address(bridge), "Example Bridge");
+        // Use the label cheatcode to mark the address with "balancer Bridge" in the traces
+        vm.label(address(bridge), "Balancer Bridge");
 
         // Impersonate the multi-sig to add a new bridge
         vm.startPrank(MULTI_SIG);
 
-        // List the example-bridge with a gasLimit of 120k
+        // List the bridge with a gasLimit of 120k
         // WARNING: If you set this value too low the interaction will fail for seemingly no reason!
         // OTOH if you se it too high bridge users will pay too much
         ROLLUP_PROCESSOR.setSupportedBridge(address(bridge), 120000);
@@ -46,7 +48,7 @@ contract ExampleE2ETest is BridgeTestBase {
 
         vm.stopPrank();
 
-        // Fetch the id of the example bridge
+        // Fetch the id of the balancer bridge
         id = ROLLUP_PROCESSOR.getSupportedBridgesLength();
 
         // Subsidize the bridge when used with USDC and register a beneficiary
@@ -62,7 +64,7 @@ contract ExampleE2ETest is BridgeTestBase {
     }
 
     // @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.
-    function testExampleBridgeE2ETest(uint96 _depositAmount) public {
+    function testBalancerBridgeE2ETest(uint96 _depositAmount) public {
         vm.assume(_depositAmount > 1);
         vm.warp(block.timestamp + 1 days);
 
@@ -78,7 +80,7 @@ contract ExampleE2ETest is BridgeTestBase {
         // Execute the rollup with the bridge interaction. Ensure that event as seen above is emitted.
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = ROLLUP_ENCODER.processRollupAndGetBridgeResult();
 
-        // Note: Unlike in unit tests there is no need to manually transfer the tokens - RollupProcessor does this
+        // Note: Unlike i n unit tests there is no need to manually transfer the tokens - RollupProcessor does this
 
         // Check the output values are as expected
         assertEq(outputValueA, _depositAmount, "outputValueA doesn't equal deposit");

@@ -3,6 +3,7 @@
 pragma solidity >=0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IVault, IAsset, PoolSpecialization} from "../../interfaces/balancer/IVault.sol";
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 import {ErrorLib} from "../base/ErrorLib.sol";
 import {BridgeBase} from "../base/BridgeBase.sol";
@@ -15,11 +16,23 @@ import {BridgeBase} from "../base/BridgeBase.sol";
  *      sent to it.
  */
 contract BalancerBridge is BridgeBase {
+
+    // the balancer contract
+    address private immutable balancerAddress;
+    address private immutable poolAddress;
+
     /**
      * @notice Set address of rollup processor
      * @param _rollupProcessor Address of rollup processor
      */
-    constructor(address _rollupProcessor) BridgeBase(_rollupProcessor) {
+    constructor(
+        address _rollupProcessor,
+        address _balancerVaultAddress,
+        address _poolAddress
+    ) BridgeBase(_rollupProcessor) {
+        balancerAddress = _balancerVaultAddress;
+        poolAddress = _poolAddress;
+
         address dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
         address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
@@ -65,13 +78,14 @@ contract BalancerBridge is BridgeBase {
         if (_outputAssetA.erc20Address != _inputAssetA.erc20Address) revert ErrorLib.InvalidOutputA();
         // Return the input value of input asset
         outputValueA = _totalInputValue;
+        // outputValueA = singleSwapBalancerVault(inputAssetA.erc20Address,);
         // Approve rollup processor to take input value of input asset
         IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, _totalInputValue);
-
         // Pay out subsidy to the rollupBeneficiary
         SUBSIDY.claimSubsidy(
             computeCriteria(_inputAssetA, _inputAssetB, _outputAssetA, _outputAssetB, _auxData), _rollupBeneficiary
         );
+
     }
 
     /**
