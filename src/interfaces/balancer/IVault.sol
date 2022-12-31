@@ -84,37 +84,6 @@ interface IVault {
     function getPool(bytes32 poolId) external view returns (address, PoolSpecialization);
 
     /**
-     * @dev Simulates a call to `batchSwap`, returning an array of Vault asset deltas. Calls to `swap` cannot be
-     * simulated directly, but an equivalent `batchSwap` call can and will yield the exact same result.
-     *
-     * Each element in the array corresponds to the asset at the same index, and indicates the number of tokens (or ETH)
-     * the Vault would take from the sender (if positive) or send to the recipient (if negative). The arguments it
-     * receives are the same that an equivalent `batchSwap` call would receive.
-     *
-     * Unlike `batchSwap`, this function performs no checks on the sender or recipient field in the `funds` struct.
-     * This makes it suitable to be called by off-chain applications via eth_call without needing to hold tokens,
-     * approve them for the Vault, or even know a user's address.
-     *
-     * Note that this function is not 'view' (due to implementation details): the client code must explicitly execute
-     * eth_call instead of eth_sendTransaction.
-     */
-
-    struct BatchSwapStep {
-        bytes32 poolId;
-        uint256 assetInIndex;
-        uint256 assetOutIndex;
-        uint256 amount;
-        bytes userData;
-    }
-
-    function queryBatchSwap(
-        SwapKind kind,
-        BatchSwapStep[] memory swaps,
-        IAsset[] memory assets,
-        FundManagement memory funds
-    ) external view returns (int256[] memory assetDeltas);
-
-    /**
      * @dev Returns a Pool's registered tokens, the total balance for each, and the latest block when *any* of
      * the tokens' `balances` changed.
      *

@@ -4,10 +4,12 @@ pragma solidity >=0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IVault, IAsset, PoolSpecialization} from "../../interfaces/balancer/IVault.sol";
+import {IPool} from "../../interfaces/balancer/IPool.sol";
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 import {ErrorLib} from "../base/ErrorLib.sol";
 import {BridgeBase} from "../base/BridgeBase.sol";
 
+import "forge-std/Test.sol";
 /**
  * @title An example bridge contract.
  * @author Aztec Team
@@ -17,8 +19,10 @@ import {BridgeBase} from "../base/BridgeBase.sol";
  */
 contract BalancerBridge is BridgeBase {
 
+    error INVALID_POOL();
+
     // the balancer contract
-    address private immutable balancerAddress;
+    address public constant balancer = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
     address private immutable poolAddress;
 
     /**
@@ -27,31 +31,37 @@ contract BalancerBridge is BridgeBase {
      */
     constructor(
         address _rollupProcessor,
-        address _balancerVaultAddress,
         address _poolAddress
     ) BridgeBase(_rollupProcessor) {
-        balancerAddress = _balancerVaultAddress;
         poolAddress = _poolAddress;
+    }
 
-        address dai = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-        address usdc = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-
-        uint256[] memory criterias = new uint256[](2);
-        uint32[] memory gasUsage = new uint32[](2);
-        uint32[] memory minGasPerMinute = new uint32[](2);
-
-        criterias[0] = uint256(keccak256(abi.encodePacked(dai, dai)));
-        criterias[1] = uint256(keccak256(abi.encodePacked(usdc, usdc)));
-
-        gasUsage[0] = 72896;
-        gasUsage[1] = 80249;
-
-        minGasPerMinute[0] = 100;
-        minGasPerMinute[1] = 150;
-
-        // We set gas usage in the subsidy contract
-        // We only want to incentivize the bridge when input and output token is Dai or USDC
-        SUBSIDY.setGasUsageAndMinGasPerMinute(criterias, gasUsage, minGasPerMinute);
+        /**
+     * @notice Sets all the important approvals.
+     * @param _tokensIn - An array of address of input tokens (tokens to later swap in the convert(...) function)
+     * @param _tokensOut - An array of address of output tokens (tokens to later return to rollup processor)
+     * @dev SwapBridge never holds any ERC20 tokens after or before an invocation of any of its functions. For this
+     * reason the following is not a security risk and makes convert(...) function more gas efficient.
+     */
+    function preApproveTokens(address[] calldata _tokensIn, address[] calldata _tokensOut) external {
+        uint256 tokensLength = _tokensIn.length;
+        for (uint256 i; i < tokensLength;) {
+            address tokenIn = _tokensIn[i];
+            IERC20(tokenIn).approve(balancer, 0);
+            IERC20(tokenIn).approve(balancer, type(uint256).max);
+            unchecked {
+                ++i;
+            }
+        }
+        tokensLength = _tokensOut.length;
+        for (uint256 i; i < tokensLength;) {
+            address tokenOut = _tokensOut[i];
+            IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), 0);
+            IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), type(uint256).max);
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /**
@@ -72,20 +82,86 @@ contract BalancerBridge is BridgeBase {
         uint256,
         uint64 _auxData,
         address _rollupBeneficiary
-    ) external payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256, bool) {
-        // Check the input asset is ERC20
-        if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidInputA();
-        if (_outputAssetA.erc20Address != _inputAssetA.erc20Address) revert ErrorLib.InvalidOutputA();
-        // Return the input value of input asset
-        outputValueA = _totalInputValue;
-        // outputValueA = singleSwapBalancerVault(inputAssetA.erc20Address,);
-        // Approve rollup processor to take input value of input asset
-        IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, _totalInputValue);
+    ) external payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256, bool) {                
         // Pay out subsidy to the rollupBeneficiary
         SUBSIDY.claimSubsidy(
-            computeCriteria(_inputAssetA, _inputAssetB, _outputAssetA, _outputAssetB, _auxData), _rollupBeneficiary
+            _computeCriteria(_inputAssetA.erc20Address, _outputAssetA.erc20Address), _rollupBeneficiary
+        );
+        
+        // Check if the input asset is ERC20
+        if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidInputA();
+        if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidOutputA();
+
+        // Get the pool id associated with the pool
+        bytes32 poolId = IPool(poolAddress).getPoolId();
+        
+        IVault.SingleSwap memory singleSwap = IVault.SingleSwap({
+            poolId: poolId,
+            kind: IVault.SwapKind.GIVEN_IN,
+            assetIn: IAsset(_inputAssetA.erc20Address),
+            assetOut: IAsset(_outputAssetA.erc20Address),
+            amount: _totalInputValue,
+            userData: "0x00"
+        });
+
+        IVault.FundManagement memory fundManagement = IVault.FundManagement({
+            sender: address(this), // the bridge has already received the tokens from the rollup so it owns totalInputValue of inputAssetA
+            fromInternalBalance: false,
+            recipient: payable(address(this)), // we want the output tokens transferred back to us
+            toInternalBalance: false
+        });
+
+        // Swap
+        outputValueA = IVault(balancer).swap(
+          singleSwap,
+          fundManagement,
+          0, // limit
+          block.timestamp
         );
 
+        /* Future JoinPool */
+        // IERC20[] memory tokens;
+        // uint256[] memory balances;
+        // uint256 lastChangeBlock;
+        // (tokens, balances, lastChangeBlock) = IVault(vaultAddress).getPoolTokens(poolId);
+
+        // vault.joinPool({
+        //     poolAddress: _outputAssetA.erc20Address,
+        //     poolId: this.poolId,
+        //     recipient: to,
+        //     currentBalances,
+        //     tokens: allTokens,
+        //     lastChangeBlock: params.lastChangeBlock ?? 0,
+        //     protocolFeePercentage: params.protocolFeePercentage ?? 0,
+        //     data: params.data ?? '0x',
+        //     from: params.from,
+        // });
+        
+        // Approve rollup processor to take input value of input asset
+        IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, outputValueA);
+    }
+
+    /**
+     * @notice Registers subsidy criteria for a given token pair.
+     * @param _tokenIn - Input token to swap
+     * @param _tokenOut - Output token to swap
+     */
+    function registerSubsidyCriteria(address _tokenIn, address _tokenOut) external {
+        SUBSIDY.setGasUsageAndMinGasPerMinute({
+            _criteria: _computeCriteria(_tokenIn, _tokenOut),
+            _gasUsage: uint32(300000), // 300k gas (Note: this is a gas usage when only 1 split path is used)
+            _minGasPerMinute: uint32(100) // 1 fully subsidized call per 2 days (300k / (24 * 60) / 2)
+        });
+    }
+
+    /**
+     * @notice Computes the criteria that is passed when claiming subsidy.
+     * @param _inputToken The input asset
+     * @param _outputToken The output asset
+     * @return The criteria
+     */
+    function _computeCriteria(address _inputToken, address _outputToken) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(_inputToken, _outputToken)));
     }
 
     /**

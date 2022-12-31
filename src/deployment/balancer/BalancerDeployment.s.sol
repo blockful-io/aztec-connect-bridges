@@ -6,14 +6,13 @@ import {BaseDeployment} from "../base/BaseDeployment.s.sol";
 import {BalancerBridge} from "../../bridges/balancer/BalancerBridge.sol";
 
 contract BalancerDeployment is BaseDeployment {
-    address public constant balancerVault = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    address public constant bbausd = 0xA13a9247ea42D743238089903570127DdA72fE44;
-    
+    address public constant BBAUSD = 0xA13a9247ea42D743238089903570127DdA72fE44;
+
     function deploy() public returns (address) {
         emit log("Deploying balancer bridge");
 
         vm.broadcast();
-        BalancerBridge bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), balancerVault, bbausd);
+        BalancerBridge bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), BBAUSD);
 
         emit log_named_address("balancer bridge deployed to", address(bridge));
 
