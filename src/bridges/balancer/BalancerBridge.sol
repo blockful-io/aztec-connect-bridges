@@ -22,9 +22,9 @@ contract BalancerBridge is BridgeBase {
     error INVALID_POOL();
 
     // Main addresses
-    address public immutable pool;
-    address public constant balancer = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    IVault public constant VAULT = IVault(balancer);
+    address public immutable poolAddr;
+    address public constant vaultAddr = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    IVault public constant VAULT = IVault(vaultAddr);
 
     /**
      * @notice Set address of rollup processor
@@ -34,7 +34,7 @@ contract BalancerBridge is BridgeBase {
         address _rollupProcessor,
         address _poolAddress
     ) BridgeBase(_rollupProcessor) {
-        pool = _poolAddress;
+        poolAddr = _poolAddress;
     }
 
         /**
@@ -48,8 +48,8 @@ contract BalancerBridge is BridgeBase {
         uint256 tokensLength = _tokensIn.length;
         for (uint256 i; i < tokensLength;) {
             address tokenIn = _tokensIn[i];
-            IERC20(tokenIn).approve(balancer, 0);
-            IERC20(tokenIn).approve(balancer, type(uint256).max);
+            IERC20(tokenIn).approve(vaultAddr, 0);
+            IERC20(tokenIn).approve(vaultAddr, type(uint256).max);
             unchecked {
                 ++i;
             }
@@ -93,8 +93,11 @@ contract BalancerBridge is BridgeBase {
         if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidInputA();
         if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidOutputA();
 
-        // joinpool
-        (outputValueA, ) = joinPool();
+        // Fetch poolId from bb-a-USD pool address
+        bytes32 poolId = IPool(poolAddr).getPoolId();
+
+        // Calls the joinPool tryna fetch the output value in bpts
+        (outputValueA, ) = joinPool(poolId,_inputAssetA.erc20Address, _outputAssetA.erc20Address, _totalInputValue);
         
         // Approve rollup processor to take input value of input asset
         IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, outputValueA);
@@ -103,8 +106,7 @@ contract BalancerBridge is BridgeBase {
     /**
      * @notice A function which returns an amount of _outputAssetA
      */
-    function joinPool() internal returns (uint256, uint256[] memory) {
-        // bytes32 poolId = IPool(pool).getPoolId();
+    function joinPool(bytes32 poolId, address _inputAssetA, address _outputAssetA, uint256 _totalInputValue) internal returns (uint256, uint256[] memory) {
         // (
         //     IERC20[] memory tokens, 
         //     uint256[] memory balances,
