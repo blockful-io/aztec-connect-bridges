@@ -19,8 +19,6 @@ import "forge-std/Test.sol";
  */
 contract BalancerBridge is BridgeBase {
 
-    error INVALID_POOL();
-
     // Main addresses
     address public immutable poolAddr;
     address public constant vaultAddr = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
@@ -89,9 +87,13 @@ contract BalancerBridge is BridgeBase {
             _computeCriteria(_inputAssetA.erc20Address, _outputAssetA.erc20Address), _rollupBeneficiary
         );
         
+        bool inputIsEth = _inputAssetA.assetType == AztecTypes.AztecAssetType.ETH;
+        bool outputIsEth = _outputAssetA.assetType == AztecTypes.AztecAssetType.ETH;
+
+
         // Check if the input asset is ERC20
-        if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidInputA();
-        if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidOutputA();
+        if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20 && !inputIsEth) revert ErrorLib.InvalidInputA();
+        if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20 && !outputIsEth) revert ErrorLib.InvalidOutputA();
 
         // Fetch poolId from bb-a-USD pool address
         bytes32 poolId = IPool(poolAddr).getPoolId();
