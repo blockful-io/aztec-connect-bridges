@@ -21,9 +21,10 @@ contract BalancerBridge is BridgeBase {
 
     error INVALID_POOL();
 
-    // the balancer contract
+    // Main addresses
+    address public immutable pool;
     address public constant balancer = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    address private immutable poolAddress;
+    IVault public constant VAULT = IVault(balancer);
 
     /**
      * @notice Set address of rollup processor
@@ -33,7 +34,7 @@ contract BalancerBridge is BridgeBase {
         address _rollupProcessor,
         address _poolAddress
     ) BridgeBase(_rollupProcessor) {
-        poolAddress = _poolAddress;
+        pool = _poolAddress;
     }
 
         /**
@@ -92,14 +93,49 @@ contract BalancerBridge is BridgeBase {
         if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidInputA();
         if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20) revert ErrorLib.InvalidOutputA();
 
-        // Get the pool id associated with the pool
-        bytes32 poolId = IPool(poolAddress).getPoolId();
+        // joinpool
+        (outputValueA, ) = joinPool();
         
+        // Approve rollup processor to take input value of input asset
+        IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, outputValueA);
+    }
+
+    /**
+     * @notice A function which returns an amount of _outputAssetA
+     */
+    function joinPool() internal returns (uint256, uint256[] memory) {
+        // bytes32 poolId = IPool(pool).getPoolId();
+        // (
+        //     IERC20[] memory tokens, 
+        //     uint256[] memory balances,
+        // ) = VAULT.getPoolTokens(poolId);
+
+        // VAULT.joinPool({
+        //     poolAddress: pool,
+        //     poolId: poolId,
+        //     recipient: address(this),
+        //     currentBalances: balances,
+        //     tokens: allTokens,
+        //     lastChangeBlock: params.lastChangeBlock ?? 0,
+        //     protocolFeePercentage: params.protocolFeePercentage ?? 0,
+        //     data: params.data ?? '0x',
+        //     from: params.from,
+        // });
+    }
+
+    /**
+     * @notice A function which returns an amount of _outputAssetA
+     * @param _inputAssetA - The token IN
+     * @param _outputAssetA - The token OUT
+     * @param _totalInputValue - The amount of _inputAssetA to swap
+     * @return outputValueA - the amount of output assets returned
+     */
+    function swapGiveIn(bytes32 poolId, address _inputAssetA, address _outputAssetA, uint256 _totalInputValue) internal returns (uint256 outputValueA) {
         IVault.SingleSwap memory singleSwap = IVault.SingleSwap({
             poolId: poolId,
             kind: IVault.SwapKind.GIVEN_IN,
-            assetIn: IAsset(_inputAssetA.erc20Address),
-            assetOut: IAsset(_outputAssetA.erc20Address),
+            assetIn: IAsset(_inputAssetA),
+            assetOut: IAsset(_outputAssetA),
             amount: _totalInputValue,
             userData: "0x00"
         });
@@ -112,33 +148,12 @@ contract BalancerBridge is BridgeBase {
         });
 
         // Swap
-        outputValueA = IVault(balancer).swap(
+        outputValueA = VAULT.swap(
           singleSwap,
           fundManagement,
           0, // limit
           block.timestamp
         );
-
-        /* Future JoinPool */
-        // IERC20[] memory tokens;
-        // uint256[] memory balances;
-        // uint256 lastChangeBlock;
-        // (tokens, balances, lastChangeBlock) = IVault(vaultAddress).getPoolTokens(poolId);
-
-        // vault.joinPool({
-        //     poolAddress: _outputAssetA.erc20Address,
-        //     poolId: this.poolId,
-        //     recipient: to,
-        //     currentBalances,
-        //     tokens: allTokens,
-        //     lastChangeBlock: params.lastChangeBlock ?? 0,
-        //     protocolFeePercentage: params.protocolFeePercentage ?? 0,
-        //     data: params.data ?? '0x',
-        //     from: params.from,
-        // });
-        
-        // Approve rollup processor to take input value of input asset
-        IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, outputValueA);
     }
 
     /**
