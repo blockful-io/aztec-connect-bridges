@@ -17,6 +17,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     address private constant vaultAddr = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
     address private constant BBAUSD = 0xA13a9247ea42D743238089903570127DdA72fE44;
     address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    address private constant B80BAL20WETH = 0x5c6Ee304399DBdB9C8Ef030aB642B10820DB8F56;
+    address private constant BAL = 0xba100000625a3754423978a60c9317c58a424e3D;
     address private constant BENEFICIARY = address(11);
 
     address private rollupProcessor;
@@ -32,7 +34,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         rollupProcessor = address(this);
 
         // Deploy a new balancer bridge and pass the pool address of bb-a-usd
-        bridge = new BalancerBridge(rollupProcessor, BBAUSD);
+        bridge = new BalancerBridge(rollupProcessor, B80BAL20WETH);
 
         // Set ETH balance of bridge and BENEFICIARY to 0 for clarity (somebody sent ETH to that address on mainnet)
         vm.deal(address(bridge), 0);
@@ -47,11 +49,11 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         // Using this to trick the compiler for now
         AztecTypes.AztecAsset memory bbausdAsset =
-            AztecTypes.AztecAsset({id: 1, erc20Address: BBAUSD, assetType: AztecTypes.AztecAssetType.ERC20});
+            AztecTypes.AztecAsset({id: 1, erc20Address: B80BAL20WETH, assetType: AztecTypes.AztecAssetType.ERC20});
         
         // Should be like this instead
-        // ROLLUP_PROCESSOR.setSupportedAsset(address(BBAUSD), 500000);
-        // AztecTypes.AztecAsset memory bbausdAsset = ROLLUP_ENCODER.getRealAztecAsset(BBAUSD);
+        // ROLLUP_PROCESSOR.setSupportedAsset(address(B80BAL20WETH), 500000);
+        // AztecTypes.AztecAsset memory bbausdAsset = ROLLUP_ENCODER.getRealAztecAsset(B80BAL20WETH);
 
         bridge.registerSubsidyCriteria(ethAsset.erc20Address, bbausdAsset.erc20Address);
         SUBSIDY.subsidize{value: 1e17}(
@@ -75,7 +77,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
     // function testInvalidOutputAssetType() public {
     //     AztecTypes.AztecAsset memory inputAssetA =
-    //         AztecTypes.AztecAsset({id: 1, erc20Address: DAI, assetType: AztecTypes.AztecAssetType.ERC20});
+    //         AztecTypes.AztecAsset({id: 1, erc20Address: BAL, assetType: AztecTypes.AztecAssetType.ERC20});
     //     vm.expectRevert(ErrorLib.InvalidOutputA.selector);
     //     bridge.convert(inputAssetA, emptyAsset, emptyAsset, emptyAsset, 0, 0, 0, address(0));
     // }
@@ -94,26 +96,24 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             AztecTypes.AztecAsset({id: 0, erc20Address: address(0), assetType: AztecTypes.AztecAssetType.ETH});
 
         AztecTypes.AztecAsset memory outputAssetA =
-            AztecTypes.AztecAsset({id: 1, erc20Address: BBAUSD, assetType: AztecTypes.AztecAssetType.ERC20});
+            AztecTypes.AztecAsset({id: 1, erc20Address: B80BAL20WETH, assetType: AztecTypes.AztecAssetType.ERC20});
 
         // Rollup processor transfers ERC20 tokens to the bridge before calling convert. Since we are calling
         // bridge.convert(...) function directly we have to transfer the funds in the test on our own. In this case
         // we'll solve it by directly minting the _depositAmount of Dai to the bridge.
-        deal(DAI, address(bridge), _depositAmount);
+        deal(BAL, address(bridge), _depositAmount);
 
         // Store dai balance before interaction to be able to verify the balance after interaction is correct
-        uint256 daiBalanceBefore = IERC20(DAI).balanceOf(rollupProcessor);
+        uint256 daiBalanceBefore = IERC20(BAL).balanceOf(rollupProcessor);
 
         // Pre-approve tokens
         address[] memory tokensIn = new address[](1);
-        tokensIn[0] = DAI;
+        tokensIn[0] = BAL;
 
         address[] memory tokensOut = new address[](1);
-        tokensOut[0] = BBAUSD;
+        tokensOut[0] = B80BAL20WETH;
 
         bridge.preApproveTokens(tokensIn, tokensOut);
-
-
 
         // Call the bridge contract
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.convert(
@@ -133,7 +133,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         // assertEq(outputValueB, 0, "Output value B must be 0");
         // assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
-        // uint256 daiBalanceAfter = IERC20(DAI).balanceOf(rollupProcessor);
+        // uint256 daiBalanceAfter = IERC20(BAL).balanceOf(rollupProcessor);
         // assertEq(daiBalanceAfter - daiBalanceBefore, _depositAmount, "Balances must match");
 
         // SUBSIDY.withdraw(BENEFICIARY);
