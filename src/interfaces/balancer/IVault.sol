@@ -19,6 +19,12 @@ interface IVault {
         GIVEN_OUT
     }
 
+    enum JoinKind { 
+        INIT, 
+        EXACT_TOKENS_IN_FOR_BPT_OUT, 
+        TOKEN_IN_FOR_EXACT_BPT_OUT
+    }
+    
     /**
      * @dev Called by users to join a Pool, which transfers tokens from `sender` into the Pool's balance. This will
      * trigger custom Pool behavior, which will typically grant something in return to `recipient` - often tokenized
@@ -158,4 +164,8 @@ interface IVault {
         external
         view
         returns (IERC20[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
+
+    /// @dev Returns the poolId for this pool
+    /// @return The poolId for this pool
+    function getPoolId() external view returns (bytes32);
 }

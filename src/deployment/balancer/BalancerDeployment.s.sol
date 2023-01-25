@@ -12,7 +12,7 @@ contract BalancerDeployment is BaseDeployment {
         emit log("Deploying balancer bridge");
 
         vm.broadcast();
-        BalancerBridge bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), BBAUSD);
+        BalancerBridge bridge = new BalancerBridge(address(ROLLUP_PROCESSOR));
 
         emit log_named_address("balancer bridge deployed to", address(bridge));
 

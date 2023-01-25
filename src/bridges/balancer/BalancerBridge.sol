@@ -4,7 +4,7 @@ pragma solidity >=0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IVault, IAsset, PoolSpecialization} from "../../interfaces/balancer/IVault.sol";
-import {IPool} from "../../interfaces/balancer/IPool.sol";
+import {ISubsidy} from "../../aztec/interfaces/ISubsidy.sol";
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 import {ErrorLib} from "../base/ErrorLib.sol";
 import {BridgeBase} from "../base/BridgeBase.sol";
@@ -63,44 +63,15 @@ contract BalancerBridge is BridgeBase {
     }
 
     /**
-     * @notice A function which will build the parameters for the vault action
-     * @param _inputAssetA - Arbitrary ERC20 token
-     * @param _outputAssetA - Equal to _inputAssetA
-     * @param _rollupBeneficiary - Address of the contract which receives subsidy in case subsidy was set for a given
-     *                             criteria
+     * @notice A function which will build the parameters for the vault action criteria
      * @param _joinPool - The struct containing the parameters for the vault action
-     * @return outputValueA - the amount of output asset to return
+     * @return auxData - The hash in uint64
      */
-    function joinConvert(
-        AztecTypes.AztecAsset calldata _inputAssetA,
-        AztecTypes.AztecAsset calldata _inputAssetB,
-        AztecTypes.AztecAsset calldata _outputAssetA,
-        AztecTypes.AztecAsset calldata _outputAssetB,
-        uint256 _totalInputValue,
-        uint256 _interactionNounce,
-        address _rollupBeneficiary,
+    function commitJoin(
         IVault.JoinPool memory _joinPool
-    ) external payable returns (uint256 outputValueA, uint256, bool) { 
-        uint64 auxData = convertBytes32ToUint(keccak256(abi.encode(_joinPool)));
+    ) public returns (uint64 auxData) { 
+        auxData = uint64(uint256(keccak256(abi.encode(_joinPool))));
         joinPoolStructs[auxData] = _joinPool;
-
-        (outputValueA, , ) = 
-        convert(
-            _inputAssetA,
-            _inputAssetB,
-            _outputAssetA,
-            _outputAssetB,
-            _totalInputValue,
-            _interactionNounce,
-            auxData,
-            _rollupBeneficiary        
-        );
-
-        delete(joinPoolStructs[auxData]);
-    }
-
-    function convertBytes32ToUint(bytes32 _input) public pure returns (uint64 _auxData) {
-        _auxData = uint64(uint(uint256(_input) & 0xFFFFFFFF));
     }
 
     /**
@@ -121,34 +92,36 @@ contract BalancerBridge is BridgeBase {
         uint256,
         uint64 _auxData,
         address _rollupBeneficiary
-    ) public payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256, bool) {                
+    ) external payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256, bool) {                
         // Pay out subsidy to the rollupBeneficiary
         SUBSIDY.claimSubsidy(
-            _computeCriteria(_inputAssetA.erc20Address, _outputAssetA.erc20Address), _rollupBeneficiary
+            _computeCriteria(_inputAssetA.erc20Address, _inputAssetB.erc20Address, _outputAssetA.erc20Address), _rollupBeneficiary
         );
         
+        // Check if the input asset is ETH
         bool inputIsEth = _inputAssetA.assetType == AztecTypes.AztecAssetType.ETH;
+        inputIsEth == true ? true :  _inputAssetB.assetType == AztecTypes.AztecAssetType.ETH;
         bool outputIsEth = _outputAssetA.assetType == AztecTypes.AztecAssetType.ETH;
 
-        // Check if the input asset is ERC20
+        // Check if the input asset is ETH
         if (_inputAssetA.assetType != AztecTypes.AztecAssetType.ERC20 && !inputIsEth) revert ErrorLib.InvalidInputA();
         if (_outputAssetA.assetType != AztecTypes.AztecAssetType.ERC20 && !outputIsEth) revert ErrorLib.InvalidOutputA();
 
-        // Get stuff from the struct map
+        // Load the inputs for the vault action
         IVault.JoinPool memory inputs = joinPoolStructs[_auxData];
 
-        // Calls the joinPool tryna fetch the output value in bpts
+        // call joinPool and retrieves the output amount
         outputValueA = 
         joinPool(
             inputs.poolId,
             inputs.sender,
             inputs.recipient,
-            inputs.request.assets,
-            inputs.request.maxAmountsIn,
-            inputs.request.userData,
-            inputs.request.fromInternalBalance
+            inputs.request
         );
-        
+
+        // Delete the struct from the mapping
+        delete(joinPoolStructs[_auxData]);
+
         // Approve rollup processor to take input value of input asset
         IERC20(_outputAssetA.erc20Address).approve(ROLLUP_PROCESSOR, outputValueA);
     }
@@ -158,30 +131,20 @@ contract BalancerBridge is BridgeBase {
      * @param _poolId - The poolId of the pool to join
      * @param _sender - The address which will send the tokens to the pool
      * @param _recipient - The address which will receive the pool tokens
-     * @param _assets - The assets to join
-     * @param _maxAmountsIn - The maximum amounts of each asset to join
-     * @param _userData - The data to pass to the pool
-     * @param _fromInternalBalance - Whether to join from the internal balance
+     * @param request - The struct containing the parameters for the vault action
+     * @return outputValue - the amount of output asset to return
      */
     function joinPool(
         bytes32 _poolId,
         address _sender,
         address _recipient,
-        IAsset[] memory _assets,
-        uint256[] memory _maxAmountsIn,
-        bytes memory _userData,
-        bool _fromInternalBalance
+        IVault.JoinPoolRequest memory request
     ) internal returns (uint256 outputValue) {
-        IVault.JoinPoolRequest memory request = IVault.JoinPoolRequest({
-            assets: _assets,
-            maxAmountsIn: _maxAmountsIn,
-            userData: _userData,
-            fromInternalBalance: _fromInternalBalance
-        });
-
+        // Get the address of the pool
         (address poolAddr, ) = VAULT.getPool(_poolId);
         outputValue = IERC20(poolAddr).balanceOf(_recipient);
 
+        // before and after the vault action,
         VAULT.joinPool(
           _poolId,
           _sender,
@@ -189,6 +152,7 @@ contract BalancerBridge is BridgeBase {
           request
         );
 
+        // to calculate the output value
         outputValue = IERC20(poolAddr).balanceOf(_recipient) - outputValue;
     }
 
@@ -199,10 +163,10 @@ contract BalancerBridge is BridgeBase {
      * @param _totalInputValue - The amount of _inputAssetA to swap
      * @return outputValueA - the amount of output assets returned
      */
-    function swapGiveIn(bytes32 poolId, address _inputAssetA, address _outputAssetA, uint256 _totalInputValue) internal returns (uint256 outputValueA) {
+    function swapGiveInAndOut(IVault.SwapKind kind,bytes32 poolId, address _inputAssetA, address _outputAssetA, uint256 _totalInputValue) internal returns (uint256 outputValueA) {
         IVault.SingleSwap memory singleSwap = IVault.SingleSwap({
             poolId: poolId,
-            kind: IVault.SwapKind.GIVEN_IN,
+            kind: kind,
             assetIn: IAsset(_inputAssetA),
             assetOut: IAsset(_outputAssetA),
             amount: _totalInputValue,
@@ -227,12 +191,13 @@ contract BalancerBridge is BridgeBase {
 
     /**
      * @notice Registers subsidy criteria for a given token pair.
-     * @param _tokenIn - Input token to swap
-     * @param _tokenOut - Output token to swap
+     * @param _inputTokenA The input assetA
+     * @param _inputTokenB The input assetB
+     * @param _outputToken The output asset
      */
-    function registerSubsidyCriteria(address _tokenIn, address _tokenOut) external {
+    function registerSubsidyCriteria(address _inputTokenA, address _inputTokenB, address _outputToken) external {
         SUBSIDY.setGasUsageAndMinGasPerMinute({
-            _criteria: _computeCriteria(_tokenIn, _tokenOut),
+            _criteria: _computeCriteria(_inputTokenA, _inputTokenB, _outputToken),
             _gasUsage: uint32(300000), // 300k gas (Note: this is a gas usage when only 1 split path is used)
             _minGasPerMinute: uint32(100) // 1 fully subsidized call per 2 days (300k / (24 * 60) / 2)
         });
@@ -240,31 +205,21 @@ contract BalancerBridge is BridgeBase {
 
     /**
      * @notice Computes the criteria that is passed when claiming subsidy.
-     * @param _inputToken The input asset
+     * @param _inputTokenA The input assetA
+     * @param _inputTokenB The input assetB
      * @param _outputToken The output asset
      * @return The criteria
      */
-    function _computeCriteria(address _inputToken, address _outputToken) internal pure returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(_inputToken, _outputToken)));
+    function _computeCriteria(address _inputTokenA, address _inputTokenB, address _outputToken) public pure returns (uint256) {
+        return uint256(keccak256(abi.encodePacked(_inputTokenA, _inputTokenB, _outputToken)));
     }
 
     /**
-     * @notice Computes the criteria that is passed when claiming subsidy.
-     * @param _inputAssetA The input asset
-     * @param _outputAssetA The output asset
-     * @return The criteria
+     * @notice Cast a low-level call conversion
+     * @param tokens - an array of IERC20 tokens
+     * @return assets - an array of IAssets
      */
-    function computeCriteria(
-        AztecTypes.AztecAsset calldata _inputAssetA,
-        AztecTypes.AztecAsset calldata,
-        AztecTypes.AztecAsset calldata _outputAssetA,
-        AztecTypes.AztecAsset calldata,
-        uint64
-    ) public view override (BridgeBase) returns (uint256) {
-        return uint256(keccak256(abi.encodePacked(_inputAssetA.erc20Address, _outputAssetA.erc20Address)));
-    }
-
-    function _asIAsset(IERC20[] memory tokens) internal pure returns (IAsset[] memory assets) {
+    function asIAsset(IERC20[] memory tokens) public pure returns (IAsset[] memory assets) {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             assets := tokens

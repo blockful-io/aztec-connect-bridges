@@ -26,7 +26,7 @@ contract BalancerBridgeE2ETest is BridgeTestBase {
 
     function setUp() public {
         // Deploy a new balancer bridge
-        bridge = new BalancerBridge(address(ROLLUP_PROCESSOR), BBAUSD);
+        bridge = new BalancerBridge(address(ROLLUP_PROCESSOR));
 
         // Use the label cheatcode to mark the address with "balancer Bridge" in the traces
         vm.label(address(bridge), "Balancer Bridge");
