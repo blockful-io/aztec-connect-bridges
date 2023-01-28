@@ -60,6 +60,13 @@ contract BalancerBridgeE2ETest is BridgeTestBase {
 
         // Set the rollupBeneficiary on BridgeTestBase so that it gets included in the proofData
         ROLLUP_ENCODER.setRollupBeneficiary(BENEFICIARY);
+
+        // USE THIS ONE
+        // bridge.registerSubsidyCriteria(BAL, WETH, B80BAL20WETH);
+        // SUBSIDY.subsidize{value: 1e17}(
+        //     address(bridge), bridge._computeCriteria(BAL, WETH, B80BAL20WETH), uint32(100)
+        // );
+        // SUBSIDY.registerBeneficiary(BENEFICIARY);
     }
 
     // @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.

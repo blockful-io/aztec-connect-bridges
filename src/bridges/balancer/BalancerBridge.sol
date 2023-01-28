@@ -11,15 +11,12 @@ import {BridgeBase} from "../base/BridgeBase.sol";
 
 import "forge-std/Test.sol";
 /**
- * @title An example bridge contract.
+ * @title Balancer Bridge Contract.
  * @author Aztec Team
- * @notice You can use this contract to immediately get back what you've deposited.
  * @dev This bridge demonstrates the flow of assets in the convert function. This bridge simply returns what has been
  *      sent to it.
  */
 contract BalancerBridge is BridgeBase {
-
-    // Main addresses
     address public constant vaultAddr = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
     IVault public constant VAULT = IVault(vaultAddr);
 

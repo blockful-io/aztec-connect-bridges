@@ -16,18 +16,33 @@ import "forge-std/Test.sol";
 
 // @notice The purpose of this test is to directly test convert functionality of the bridge.
 contract BalancerBridgeUnitTest is BridgeTestBase {
+    // Bridge and Rollup
     address private constant BENEFICIARY = address(11);
-    address private constant vaultAddr = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
-    address private constant BAL = 0xba100000625a3754423978a60c9317c58a424e3D;
-
-    address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address private constant wstETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
-    address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
-    address private constant BstETHSTABLE = 0x32296969Ef14EB0c6d29669C550D4a0449130230;
-
     address private rollupProcessor;
-    // The reference to the balancer bridge
     BalancerBridge private bridge;
+    // Balancer Vault and Commons
+    address private constant VAULT = 0xBA12222222228d8Ba445958a75a0704d566BF2C8;
+    address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
+    // Balancer 80 BAL 20 WETH
+    address private constant B80BAL20WETH = 0x5c6Ee304399DBdB9C8Ef030aB642B10820DB8F56;
+    address private constant BAL = 0xba100000625a3754423978a60c9317c58a424e3D;
+    // Balancer Aave Boosted StablePool
+    address private constant BBAUSD = 0xA13a9247ea42D743238089903570127DdA72fE44;
+    address private constant BBADAI = 0xae37D54Ae477268B9997d4161B96b8200755935c;
+    address private constant BBAUSDT = 0x2F4eb100552ef93840d5aDC30560E5513DFfFACb;
+    address private constant BBAUSDC = 0x82698aeCc9E28e9Bb27608Bd52cF57f704BD1B83;
+    // Balancer stETH Stable Pool
+    address private constant BSTETHSTABLE = 0x32296969Ef14EB0c6d29669C550D4a0449130230;
+    address private constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
+    // Balancer rETH Stable Pool
+    address private constant BRETHSTABLE = 0x1E19CF2D73a72Ef1332C882F20534B6519Be0276;
+    address private constant RETH = 0xae78736Cd615f374D3085123A210448E74Fc6393;
+    // Balancer 50wstETH-50bb-a-USD
+    address private constant WSTETH50BBAUSD50 = 0x25Accb7943Fd73Dda5E23bA6329085a3C24bfb6a;
+    // Balancer 50STG-50bb-a-USD
+    address private constant STG50BBAUSD50 = 0x4ce0BD7deBf13434d3ae127430e9BD4291bfB61f;
+    address private constant STG = 0xAf5191B0De278C7286d6C7CC6ab6BB8A73bA2Cd6;
 
     // @dev This method exists on RollupProcessor.sol. It's defined here in order to be able to receive ETH like a real
     //      rollup processor would.
@@ -46,18 +61,25 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         // Use the label cheatcode to mark the address with "balancer Bridge" in the traces
         vm.label(address(bridge), "Balancer Bridge");
-        vm.label(address(vaultAddr), "Balancer Vault");
-        vm.label(address(BAL), "BAL");
-        vm.label(address(DAI), "DAI");
-        vm.label(address(wstETH), "Wrapped liquid staked Ether 2.0");
+        vm.label(address(VAULT), "Balancer Vault");
         vm.label(address(WETH), "WETH");
-        vm.label(address(BstETHSTABLE), "Balancer stETH Stable Pool");
+        vm.label(address(DAI), "DAI");
+        vm.label(address(B80BAL20WETH), "Balancer 80 BAL 20 WETH");
+        vm.label(address(BAL), "BAL");
+        
+        vm.label(address(BBAUSD), "Balancer Aave Boosted StablePool");
+        vm.label(address(BBADAI), "BBADAI");
+        vm.label(address(BBAUSDT), "BBAUSDT");
+        vm.label(address(BBAUSDC), "BBAUSDC");
 
-        bridge.registerSubsidyCriteria(wstETH, WETH, BstETHSTABLE);
-        SUBSIDY.subsidize{value: 1e17}(
-            address(bridge), bridge._computeCriteria(wstETH, WETH, BstETHSTABLE), uint32(100)
-        );
-        SUBSIDY.registerBeneficiary(BENEFICIARY);
+        vm.label(address(BSTETHSTABLE), "Balancer stETH Stable Pool");
+        vm.label(address(WSTETH), "Wrapped liquid staked Ether 2.0");
+
+        vm.label(address(WSTETH50BBAUSD50), "Balancer 50wstETH-50bb-a-USD");
+
+        vm.label(address(BRETHSTABLE), "Wrapped liquid staked Ether 2.0");
+        vm.label(address(RETH), "Rocket Pool ETH");
+
     }
 
     // function testInvalidCaller(address _callerAddress) public {
@@ -80,24 +102,22 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     //     bridge.convert(inputAssetA, emptyAsset, emptyAsset, emptyAsset, 0, 0, 0, address(0));
     // }
 
-    // function testBalancerBridgeUnitTestFixed() public {
-    //     testBalancerBridgeUnitTest(10 ether);
-    // }
+    function justForTest() public {
+        address inputA = BAL;
+        address inputB = WETH;
+        address outputA = B80BAL20WETH;
 
-    function avoidDeepStack() public returns (uint64 auxData) {
+        address[] memory tokens = [address(inputA), address(inputB)];
+        // uint64 auxData = avoidDeepStack(tokens, outputA);
+    }
+
+    function avoidDeepStack(address[] memory inputTokens, address[] calldata outputTokens) public returns (uint64 auxData) {
         // Pre-approve tokens
-        address[] memory tokensIn = new address[](2);
-        tokensIn[0] = wstETH;
-        tokensIn[1] = WETH;
-
-        address[] memory tokensOut = new address[](1);
-        tokensOut[0] = BstETHSTABLE;
-
-        bridge.preApproveTokens(tokensIn, tokensOut);
+        bridge.preApproveTokens(inputTokens, outputTokens);
 
         // Prepare IAsset
-        IERC20 token0 = IERC20(wstETH);
-        IERC20 token1 = IERC20(WETH);
+        IERC20 token0 = IERC20(inputTokens[0]);
+        IERC20 token1 = IERC20(inputTokens[1]);
         IERC20[] memory tokens = new IERC20[](2);
         tokens[0] = token0;
         tokens[1] = token1;
@@ -115,7 +135,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         bytes memory userDataEncoded = abi.encode(joinKind, initBalances);
 
         // Get poolId
-        bytes32 poolId = IVault(BstETHSTABLE).getPoolId();
+        bytes32 poolId = IVault(outputTokens[0]).getPoolId();
+        
         // Build request
         // @dev An equivalent for max uint256 can be the built-in (2**256 - 1)
 
@@ -123,7 +144,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             assets: assets,
             maxAmountsIn: amountsIn,
             userData: userDataEncoded,
-            // userData: abi.encode([1e18,1e18],[0,0]),
             fromInternalBalance: false
         });
         IVault.JoinPool memory joinPool = IVault.JoinPool({
@@ -136,32 +156,64 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         auxData = bridge.commitJoin(joinPool);
     }
 
-    // @notice The purpose of this test is to directly test convert functionality of the bridge.
-    // @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.
-    function testBalancerBridgeUnitTest() public {
-        // Define input and output assets
-        AztecTypes.AztecAsset memory inputAssetA =
-            AztecTypes.AztecAsset({id: 1, erc20Address: wstETH, assetType: AztecTypes.AztecAssetType.ERC20});
-        AztecTypes.AztecAsset memory inputAssetB =
-            AztecTypes.AztecAsset({id: 0, erc20Address: address(0), assetType: AztecTypes.AztecAssetType.ETH});
-        AztecTypes.AztecAsset memory outputAssetA =
-            AztecTypes.AztecAsset({id: 2, erc20Address: BstETHSTABLE, assetType: AztecTypes.AztecAssetType.ERC20});
+    /**
+     * @dev Helper function to build AztecAsset
+     * @param _id - The id of the asset
+     * @param _address - The address of the asset
+     * @return AztecAsset - The AztecAsset struct
+     */
+    function buildAztecAsset(
+        uint256 _id, 
+        address _address
+    ) public pure returns (AztecTypes.AztecAsset memory) {
+        AztecTypes.AztecAssetType _type = AztecTypes.AztecAssetType.ERC20; 
+        if(_address == address(0)){
+            _type = AztecTypes.AztecAssetType.ETH;
+        }
+        return AztecTypes.AztecAsset({id: _id, erc20Address: _address, assetType: _type});
+    }
+
+    /**
+     * @dev Deal multiple assets based on input token array
+     */
+    function dealMultiple(address[] memory _inputTokens, address _target, uint256[] memory _amount) public {
+        for(uint256 i = 0; i < _inputTokens.length; i++){
+            deal(_inputTokens[i], _target, _amount[i]);
+        }
+    }
+
+    /* @notice The purpose of this test is to directly test convert functionality of the bridge
+     *         when joining Balancer 80 BAL 20 WETH WeightedPool2Tokens.
+     * @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.
+     */ 
+    function testJoinBalancer80BAL20WETH() public {
+        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
+        address[] memory tokensIn = new address[](2);
+        address[] memory tokensOut = new address[](1);
+        tokensIn[0] = BAL;
+        tokensIn[1] = WETH;
+        tokensOut[0] = B80BAL20WETH;
+
+        // Prepare the assets for the bridge call, following AztecTypes standard
+        AztecTypes.AztecAsset memory inputAssetA = buildAztecAsset(0, inputA);
+        AztecTypes.AztecAsset memory inputAssetB = buildAztecAsset(1, inputB);
+        AztecTypes.AztecAsset memory outputAssetA = buildAztecAsset(2, outputA);
                 
         // Rollup processor transfers ERC20 tokens to the bridge before calling convert. Since we are calling
         // bridge.convert(...) function directly we have to transfer the funds in the test on our own. In this case
         // we'll solve it by directly minting the _depositAmount of Dai to the bridge.
-        deal(wstETH, address(bridge), 1e18);
-        deal(WETH, address(bridge), 1e18);
+        dealMultiple(tokensIn, address(bridge), [1e18, 1e18]);
 
         // Store weth balance before interaction to be able to verify the balance after interaction is correct
-        uint256 bstEthStableBalanceBefore = IERC20(BstETHSTABLE).balanceOf(address(bridge));
-        assertEq(bstEthStableBalanceBefore, 0);
+        uint256 balanceBefore = IERC20(outputA).balanceOf(address(bridge));
+        assertEq(balanceBefore, 0);
 
-        // Prepare auxData separetly tro avoid deep stack
-        uint64 auxData = avoidDeepStack();
+        // Handle auxData in function to avoid deep stack
+        uint64 auxData = avoidDeepStack(tokensIn, tokensOut);
         assertGt(auxData, 0);
 
         // Call the bridge contract
+        // @notice There is no inputValue because they are in auxData
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.convert(
             inputAssetA, // _inputAssetA - definition of an input asset
             inputAssetB, // _inputAssetB - not used so can be left empty
@@ -173,8 +225,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             BENEFICIARY // _rollupBeneficiary - address, the subsidy will be sent to
         );
 
-        uint256 bstEthStableBalanceAfter = IERC20(BstETHSTABLE).balanceOf(address(bridge));
-        assertEq(bstEthStableBalanceAfter - bstEthStableBalanceBefore, outputValueA, "Balances must match");
+        uint256 balanceAfter = IERC20(outputA).balanceOf(address(bridge));
+        assertEq(balanceAfter - balanceBefore, outputValueA, "Balances must match");
 
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
