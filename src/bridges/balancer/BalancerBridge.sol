@@ -33,7 +33,7 @@ contract BalancerBridge is BridgeBase {
     ) BridgeBase(_rollupProcessor) {
     }
 
-        /**
+    /**
      * @notice Sets all the important approvals.
      * @param _tokensIn - An array of address of input tokens (tokens to later swap in the convert(...) function)
      * @param _tokensOut - An array of address of output tokens (tokens to later return to rollup processor)
@@ -41,8 +41,13 @@ contract BalancerBridge is BridgeBase {
      * reason the following is not a security risk and makes convert(...) function more gas efficient.
      */
     function preApproveTokens(address[] calldata _tokensIn, address[] calldata _tokensOut) external {
-        uint256 tokensLength = _tokensIn.length;
-        for (uint256 i; i < tokensLength;) {
+        for (uint256 i = 0; i < _tokensIn.length;) {
+            if(address(0) == _tokensIn[i]) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             address tokenIn = _tokensIn[i];
             IERC20(tokenIn).approve(vaultAddr, 0);
             IERC20(tokenIn).approve(vaultAddr, type(uint256).max);
@@ -50,8 +55,13 @@ contract BalancerBridge is BridgeBase {
                 ++i;
             }
         }
-        tokensLength = _tokensOut.length;
-        for (uint256 i; i < tokensLength;) {
+        for (uint256 i = 0; i < _tokensOut.length;) {
+            if(address(0) == _tokensOut[i]) {
+                unchecked {
+                    ++i;
+                }
+                continue;
+            }
             address tokenOut = _tokensOut[i];
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), 0);
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), type(uint256).max);
@@ -90,7 +100,7 @@ contract BalancerBridge is BridgeBase {
     function joinPool(
         IVault.Join memory _joinPool,
         IVault.Convert calldata _convert
-    ) public returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
         ( outputValueA, outputValueB, async ) = 
         convert(
             _convert.inputAssetA,
@@ -102,7 +112,23 @@ contract BalancerBridge is BridgeBase {
             commitJoin(_joinPool),
             _convert.rollupBeneficiary
         );
-        
+    }
+
+    function exitPool(
+        IVault.Exit memory _exitPool,
+        IVault.Convert calldata _convert
+    ) public returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+        ( outputValueA, outputValueB, async ) = 
+        convert(
+            _convert.inputAssetA,
+            _convert.inputAssetB,
+            _convert.outputAssetA,
+            _convert.outputAssetB,
+            _convert.totalInputValue,
+            _convert.interactionNonce,
+            commitExit(_exitPool),
+            _convert.rollupBeneficiary
+        );
     }
 
     function paySubsidyJoinOrExit(
@@ -160,8 +186,7 @@ contract BalancerBridge is BridgeBase {
         uint256,
         uint64 _auxData,
         address _rollupBeneficiary
-    ) public payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256, bool) {                
-
+    ) public payable override (BridgeBase) onlyRollup returns (uint256 outputValueA, uint256 outputValueB, bool) {                
         // Load the inputs for the vault action
         if(actions[_auxData] == IVault.ActionKind.JOIN) {
             IVault.Join memory inputs = commitsJoin[_auxData];
@@ -174,14 +199,11 @@ contract BalancerBridge is BridgeBase {
                 inputs.recipient,
                 inputs.request
             );
-            
-            // Approve rollup processor to take input value of output asset
-            ( address outputAddress, ) = VAULT.getPool(inputs.poolId);
-            IERC20(outputAddress).approve(ROLLUP_PROCESSOR, outputValueA);
-
         } else if(actions[_auxData] == IVault.ActionKind.EXIT) {
             IVault.Exit memory inputs = commitsExit[_auxData];
+            console.log("before paySubsidyJoinOrExit");
             paySubsidyJoinOrExit(inputs.poolId, IVault.ActionKind.EXIT, _rollupBeneficiary);
+            console.log("before paySubsidyJoinOrExit");
 
             uint256[] memory outputValue = 
             exitPool(
@@ -190,7 +212,8 @@ contract BalancerBridge is BridgeBase {
                 inputs.recipient,
                 inputs.request
             );
-       
+            outputValueA = outputValue[0];
+            outputValueB = outputValue[1];
         } else {
             revert ErrorLib.InvalidAuxData();
         }
@@ -222,9 +245,17 @@ contract BalancerBridge is BridgeBase {
         (address poolAddr, ) = VAULT.getPool(_poolId);
         
         // then the balance, before and after the vault action,
-        outputValue = IERC20(poolAddr).balanceOf(_recipient);
+        outputValue = IERC20(poolAddr).balanceOf(_recipient) - outputValue;
 
-        VAULT.joinPool{value: 0}(
+        // check if the input is ETH
+        bool isEth = false;
+        for(uint256 i = 0; i < _request.assets.length; i++) {
+            if(_request.assets[i] == IAsset(address(0))) {
+                isEth = true;
+            }
+        }
+
+        VAULT.joinPool{value: isEth ? msg.value : 0}(
           _poolId,
           _sender,
           _recipient,
@@ -256,6 +287,10 @@ contract BalancerBridge is BridgeBase {
             // then the balance, before and after the vault action,
             outputValue[i] = tokens[i].balanceOf(_recipient);
         }
+
+        // isEth ?
+        // outputValue = address(_recipient).balance :
+        // outputValue = IERC20(poolAddr).balanceOf(_recipient);
 
         VAULT.exitPool(
             _poolId,
