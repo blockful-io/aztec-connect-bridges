@@ -2,6 +2,7 @@
 pragma solidity >=0.8.4;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 
 interface IAsset {
 // solhint-disable-previous-line no-empty-blocks
@@ -13,18 +14,46 @@ enum PoolSpecialization {
     TWO_TOKEN
 }
 
+enum JoinKind { 
+    INIT, 
+    EXACT_TOKENS_IN_FOR_BPT_OUT, 
+    TOKEN_IN_FOR_EXACT_BPT_OUT, 
+    ALL_TOKENS_IN_FOR_EXACT_BPT_OUT 
+}
+
+enum ExitKind { 
+    EXACT_BPT_IN_FOR_ONE_TOKEN_OUT, 
+    EXACT_BPT_IN_FOR_TOKENS_OUT, 
+    BPT_IN_FOR_EXACT_TOKENS_OUT 
+}
+
+
 interface IVault {
     enum SwapKind {
         GIVEN_IN,
         GIVEN_OUT
     }
-
-    enum JoinKind { 
-        INIT, 
-        EXACT_TOKENS_IN_FOR_BPT_OUT, 
-        TOKEN_IN_FOR_EXACT_BPT_OUT
-    }
     
+    // @dev There is something like this already?
+    enum ActionKind {
+        JOIN,
+        EXIT,
+        DEPOSIT,
+        WITHDRAW,
+        SWAP,
+        BATCHSWAP
+    }
+
+    struct Convert {
+        AztecTypes.AztecAsset inputAssetA;
+        AztecTypes.AztecAsset inputAssetB;
+        AztecTypes.AztecAsset outputAssetA;
+        AztecTypes.AztecAsset outputAssetB;
+        uint256 totalInputValue;
+        uint256 interactionNonce;
+        address rollupBeneficiary;
+    }
+
     /**
      * @dev Called by users to join a Pool, which transfers tokens from `sender` into the Pool's balance. This will
      * trigger custom Pool behavior, which will typically grant something in return to `recipient` - often tokenized
@@ -75,7 +104,7 @@ interface IVault {
      * @dev Custom struct created to aid when calling 
      *      convert function in the BalancerBridge contract. 
      */ 
-    struct JoinPool {
+    struct Join {
         bytes32 poolId;
         address sender;
         address recipient;
@@ -129,6 +158,17 @@ interface IVault {
         uint256[] minAmountsOut;
         bytes userData;
         bool toInternalBalance;
+    }
+
+    /**
+     * @dev Custom struct created to aid when calling 
+     *      convert function in the BalancerBridge contract. 
+     */ 
+    struct Exit {
+        bytes32 poolId;
+        address sender;
+        address recipient;
+        IVault.ExitPoolRequest request;
     }
     
     /**

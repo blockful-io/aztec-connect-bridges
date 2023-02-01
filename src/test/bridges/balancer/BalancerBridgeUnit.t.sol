@@ -7,7 +7,7 @@ import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
 
 // balancer-specific imports
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IVault, IAsset, PoolSpecialization} from "../../../interfaces/balancer/IVault.sol";
+import {IVault, IAsset, PoolSpecialization, JoinKind, ExitKind} from "../../../interfaces/balancer/IVault.sol";
 import {IRollupProcessor} from "rollup-encoder/interfaces/IRollupProcessor.sol";
 import {BalancerBridge} from "../../../bridges/balancer/BalancerBridge.sol";
 import {ErrorLib} from "../../../bridges/base/ErrorLib.sol";
@@ -102,137 +102,146 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     //     bridge.convert(inputAssetA, emptyAsset, emptyAsset, emptyAsset, 0, 0, 0, address(0));
     // }
 
-    function justForTest() public {
-        address inputA = BAL;
-        address inputB = WETH;
-        address outputA = B80BAL20WETH;
-
-        address[] memory tokens = [address(inputA), address(inputB)];
-        // uint64 auxData = avoidDeepStack(tokens, outputA);
+    function asIERC20(address[] memory inputTokens) internal pure returns (IERC20[] memory tokens) {
+        tokens = new IERC20[](inputTokens.length);
+        for (uint256 i = 0; i < inputTokens.length; i++) {
+            tokens[i] = IERC20(inputTokens[i]);
+        }        
     }
 
-    function avoidDeepStack(address[] memory inputTokens, address[] calldata outputTokens) public returns (uint64 auxData) {
-        // Pre-approve tokens
-        bridge.preApproveTokens(inputTokens, outputTokens);
+    function encodeData(
+        IVault.ActionKind actionType, 
+        JoinKind poolKind, 
+        address[] memory inputTokens, 
+        uint256[] memory amountsIn, 
+        address[] memory outputTokens
+    ) public view returns (
+        IVault.Join memory,
+        IVault.Convert memory
+    ) {
+        // Convert IERC20 to IAsset
+        IERC20[] memory tokens = asIERC20(actionType == IVault.ActionKind.JOIN ? inputTokens : outputTokens);
+        IAsset[] memory assets = bridge._asIAsset(tokens);
 
-        // Prepare IAsset
-        IERC20 token0 = IERC20(inputTokens[0]);
-        IERC20 token1 = IERC20(inputTokens[1]);
-        IERC20[] memory tokens = new IERC20[](2);
-        tokens[0] = token0;
-        tokens[1] = token1;
-        IAsset[] memory assets = bridge.asIAsset(tokens);
-
-        // Prepare maxAmountsIn
-        uint256[] memory amountsIn = new uint256[](2);
-        amountsIn[0] = 10e18;
-        amountsIn[1] = 10e18;
-
-        uint256 joinKind = 1;
-        uint256[] memory initBalances = new uint256[](2);
-        initBalances[0] = 1e18;
-        initBalances[1] = 1e18;
-        bytes memory userDataEncoded = abi.encode(joinKind, initBalances);
+        // @dev JoinKind is a enum in the IVault interface
+        //     Using maxAmountsIn as a higher value than the amountsIn
+        uint256[] memory maxAmountsIn = new uint256[](amountsIn.length);
+        for(uint256 i = 0; i < amountsIn.length; i++) {
+            maxAmountsIn[i] = 2**256 - 1;
+        }
+        
+        // @dev We encode both joinKind and amountsIn
+        bytes memory userDataEncoded = abi.encode(poolKind, amountsIn);
 
         // Get poolId
-        bytes32 poolId = IVault(outputTokens[0]).getPoolId();
+        // @dev There will always be only 1 issued token per single pool.
+        //      Which means we can asume the index 0 of the array is the correct pool to use.
+        //      Also assuming we are only handling joins and exits
+        bytes32 poolId = IVault(actionType == IVault.ActionKind.JOIN ? outputTokens[0] : inputTokens[0] ).getPoolId();
         
         // Build request
-        // @dev An equivalent for max uint256 can be the built-in (2**256 - 1)
-
         IVault.JoinPoolRequest memory request = IVault.JoinPoolRequest({ 
             assets: assets,
-            maxAmountsIn: amountsIn,
+            maxAmountsIn: maxAmountsIn,
             userData: userDataEncoded,
             fromInternalBalance: false
         });
-        IVault.JoinPool memory joinPool = IVault.JoinPool({
+        IVault.Join memory joinPool = IVault.Join({
             poolId: poolId,
             sender: address(bridge),
             recipient: address(bridge),
             request: request
         });
 
-        auxData = bridge.commitJoin(joinPool);
-    }
+        IVault.Convert memory convert = IVault.Convert({
+            inputAssetA: emptyAsset,
+            inputAssetB: emptyAsset,
+            outputAssetA: emptyAsset,
+            outputAssetB: emptyAsset,
+            totalInputValue: 0,
+            interactionNonce: 0,
+            rollupBeneficiary: BENEFICIARY
+        });
 
-    /**
-     * @dev Helper function to build AztecAsset
-     * @param _id - The id of the asset
-     * @param _address - The address of the asset
-     * @return AztecAsset - The AztecAsset struct
-     */
-    function buildAztecAsset(
-        uint256 _id, 
-        address _address
-    ) public pure returns (AztecTypes.AztecAsset memory) {
-        AztecTypes.AztecAssetType _type = AztecTypes.AztecAssetType.ERC20; 
-        if(_address == address(0)){
-            _type = AztecTypes.AztecAssetType.ETH;
-        }
-        return AztecTypes.AztecAsset({id: _id, erc20Address: _address, assetType: _type});
-    }
-
-    /**
-     * @dev Deal multiple assets based on input token array
-     */
-    function dealMultiple(address[] memory _inputTokens, address _target, uint256[] memory _amount) public {
-        for(uint256 i = 0; i < _inputTokens.length; i++){
-            deal(_inputTokens[i], _target, _amount[i]);
-        }
+        return (joinPool, convert);
     }
 
     /* @notice The purpose of this test is to directly test convert functionality of the bridge
      *         when joining Balancer 80 BAL 20 WETH WeightedPool2Tokens.
      * @dev In order to avoid overflows we set _depositAmount to be uint96 instead of uint256.
      */ 
-    function testJoinBalancer80BAL20WETH() public {
+    function testJoinPool80BAL20WETH() public {
         // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
         address[] memory tokensIn = new address[](2);
-        address[] memory tokensOut = new address[](1);
         tokensIn[0] = BAL;
         tokensIn[1] = WETH;
+        address[] memory tokensOut = new address[](1);
         tokensOut[0] = B80BAL20WETH;
 
-        // Prepare the assets for the bridge call, following AztecTypes standard
-        AztecTypes.AztecAsset memory inputAssetA = buildAztecAsset(0, inputA);
-        AztecTypes.AztecAsset memory inputAssetB = buildAztecAsset(1, inputB);
-        AztecTypes.AztecAsset memory outputAssetA = buildAztecAsset(2, outputA);
-                
         // Rollup processor transfers ERC20 tokens to the bridge before calling convert. Since we are calling
         // bridge.convert(...) function directly we have to transfer the funds in the test on our own. In this case
         // we'll solve it by directly minting the _depositAmount of Dai to the bridge.
-        dealMultiple(tokensIn, address(bridge), [1e18, 1e18]);
+        uint256[] memory amountsIn = new uint256[](tokensIn.length);
+        amountsIn[0] = 1e18;
+        amountsIn[1] = 1e18;
+        dealMultiple(tokensIn, address(bridge), amountsIn);
 
-        // Store weth balance before interaction to be able to verify the balance after interaction is correct
-        uint256 balanceBefore = IERC20(outputA).balanceOf(address(bridge));
-        assertEq(balanceBefore, 0);
+        // Store the input balances before the trade to compare later
+        uint256[] memory inputBalancesBefore = new uint256[](tokensIn.length);
+        for(uint256 i = 0; i < tokensIn.length; i++) {
+            inputBalancesBefore[i] = IERC20(tokensIn[i]).balanceOf(address(bridge));
+        }
 
-        // Handle auxData in function to avoid deep stack
-        uint64 auxData = avoidDeepStack(tokensIn, tokensOut);
-        assertGt(auxData, 0);
+        uint256 outputBalanceBefore = IERC20(tokensOut[0]).balanceOf(rollupProcessor);
+        assertEq(outputBalanceBefore, 0, "Initial output balance must be 0");
 
-        // Call the bridge contract
-        // @notice There is no inputValue because they are in auxData
-        (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.convert(
-            inputAssetA, // _inputAssetA - definition of an input asset
-            inputAssetB, // _inputAssetB - not used so can be left empty
-            outputAssetA, // _outputAssetA - in this balancer equal to input asset
-            emptyAsset, // _outputAssetB - not used so can be left empty
-            0, // _totalInputValue - an amount of input asset A sent to the bridge
-            0, // _interactionNonce
-            auxData, // _auxData - auxiliary data for the bridge
-            BENEFICIARY // _rollupBeneficiary - address, the subsidy will be sent to
+        // Encode all data for the function call
+        ( IVault.Join memory joinPool, IVault.Convert memory convert) = encodeData(
+            IVault.ActionKind.JOIN, 
+            JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, 
+            tokensIn, 
+            amountsIn, 
+            tokensOut
         );
+        
+        // Pre-approve tokens
+        bridge.preApproveTokens(tokensIn, tokensOut);
 
-        uint256 balanceAfter = IERC20(outputA).balanceOf(address(bridge));
-        assertEq(balanceAfter - balanceBefore, outputValueA, "Balances must match");
+        ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
+        bridge.joinPool(joinPool, convert);
 
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
+        
+        // Matches all input balances after the transaction
+        uint256[] memory inputBalancesAfter = new uint256[](tokensIn.length);
+        for(uint256 i = 0; i < tokensIn.length; i++) {
+            inputBalancesAfter[i] = IERC20(tokensIn[i]).balanceOf(address(bridge));
+        }
 
-        // // Now we transfer the funds back from the bridge to the rollup processor
-        IERC20(outputAssetA.erc20Address).transferFrom(address(bridge), rollupProcessor, outputValueA);
+        // Now we transfer the funds back from the bridge to the rollup processor
+        IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
+        
+        // Verify the rollup processor received the correct amount of tokens
+        uint256 outputBalanceAfter = IERC20(tokensOut[0]).balanceOf(rollupProcessor);
+        assertEq(outputBalanceAfter, outputValueA, "Rollup processor have not received any tokens yet");
 
     }
+
+    /**
+     * @dev Deal multiple assets based on input token array
+     * @param _inputTokens - The array of input tokens
+     * @param _target - The receiver of such tokens
+     * @param _amount - The array with the amount of tokens
+     */
+    function dealMultiple(
+        address[] memory _inputTokens, 
+        address _target, 
+        uint256[] memory _amount
+    ) public {
+        for(uint256 i = 0; i < _inputTokens.length; i++){
+            deal(_inputTokens[i], _target, _amount[i]);
+        }
+    }
+
 }
