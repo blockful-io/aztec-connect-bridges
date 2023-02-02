@@ -117,7 +117,7 @@ contract BalancerBridge is BridgeBase {
     function exitPool(
         IVault.Exit memory _exitPool,
         IVault.Convert calldata _convert
-    ) public returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
         ( outputValueA, outputValueB, async ) = 
         convert(
             _convert.inputAssetA,
@@ -201,10 +201,8 @@ contract BalancerBridge is BridgeBase {
             );
         } else if(actions[_auxData] == IVault.ActionKind.EXIT) {
             IVault.Exit memory inputs = commitsExit[_auxData];
-            console.log("before paySubsidyJoinOrExit");
-            paySubsidyJoinOrExit(inputs.poolId, IVault.ActionKind.EXIT, _rollupBeneficiary);
-            console.log("before paySubsidyJoinOrExit");
-
+            paySubsidyJoinOrExit(inputs.poolId, IVault.ActionKind.EXIT, _rollupBeneficiary);            
+            
             uint256[] memory outputValue = 
             exitPool(
                 inputs.poolId,
@@ -283,14 +281,11 @@ contract BalancerBridge is BridgeBase {
         // Load the tokens from the pool given its poolID
         (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_poolId);
 
+        outputValue = new uint256[](tokens.length);
         for(uint256 i = 0; i < tokens.length; i++) {
             // then the balance, before and after the vault action,
             outputValue[i] = tokens[i].balanceOf(_recipient);
         }
-
-        // isEth ?
-        // outputValue = address(_recipient).balance :
-        // outputValue = IERC20(poolAddr).balanceOf(_recipient);
 
         VAULT.exitPool(
             _poolId,
@@ -298,12 +293,10 @@ contract BalancerBridge is BridgeBase {
             payable(_recipient),
             _request
         );
-        
+
         for(uint256 i = 0; i < tokens.length; i++) {
-            // to calculate the output value
             outputValue[i] = tokens[i].balanceOf(_recipient) - outputValue[i];
         }
-        
     }
 
     /**
