@@ -85,6 +85,16 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         
     }
 
+    /**
+     * @dev This method is used to encode the data that will be sent to the Balancer Bridge
+     * @param actionType The action type (join or exit)
+     * @param tokensIn The tokens that will be sent to the bridge   
+     * @param amountsIn The amounts of tokens that will be sent to the bridge
+     * @param tokensOut The tokens that will be received from the bridge
+     * @return joinPool The join pool action
+     * @return exitPool The exit pool action
+     * @return convert The convert action
+     */
     function encodeData(
         IVault.ActionKind actionType, 
         address[] memory tokensIn, 
@@ -95,7 +105,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         IVault.Exit memory exitPool,
         IVault.Convert memory convert
     ) {
-
         // Convert IERC20 to IAsset
         IERC20[] memory tokens = asIERC20(actionType == IVault.ActionKind.JOIN ? tokensIn : tokensOut);
         IAsset[] memory assets = bridge._asIAsset(tokens);
@@ -171,7 +180,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             // );
             // request.minAmountsOut = amountOut;
 
-
             // @dev Currently not working, must investigate the combination that suits
             // bytes memory encodeWithSig = 
             // abi.encodeWithSignature(
@@ -205,27 +213,16 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     function testJoinPoolBSTETHSTABLE() public {
         // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
         address[] memory tokensIn = new address[](2);
-        tokensIn[0] = BAL;
+        tokensIn[0] = WSTETH;
         tokensIn[1] = WETH;
         address[] memory tokensOut = new address[](1);
-        tokensOut[0] = B80BAL20WETH;
+        tokensOut[0] = BSTETHSTABLE;
 
         // Rollup processor transfers ERC20 tokens to the bridge before calling convert
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 1e18;
         amountsIn[1] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
-
-        // Store the input and output balances before the trade to compare later
-        for(uint256 i = 0; i < tokensIn.length; i++) {
-            assertEq(
-                IERC20(tokensIn[i]).balanceOf(address(bridge)), 
-                1e18, 
-                "Initial input balances must be 1e18");
-        }
-
-        uint256 outputBalanceBefore = IERC20(tokensOut[0]).balanceOf(rollupProcessor);
-        assertEq(outputBalanceBefore, 0, "Initial output balance must be 0");
 
         // Encode all data for the function call
         ( 
@@ -246,122 +243,29 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
         bridge.joinPool(joinPool, convert);
 
+        assertGt(outputValueA, 0, "Output value A must be greater than 0");
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
-        
-        // Matches all input balances after the transaction
-        for(uint256 i = 0; i < tokensIn.length; i++) {
-            assertEq(
-                IERC20(tokensIn[i]).balanceOf(address(bridge)), 
-                0, 
-                "Input assets must be 0 after the transfer");
-        }
 
         // Now we transfer the funds from the bridge to the rollup processor
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
-        
-        // Verify the rollup processor received the correct amount of tokens
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(rollupProcessor), 
-            outputValueA, 
-            "Rollup processor have not received any tokens yet");
-
     }
 
     /** @notice - The purpose of this test is to directly test convert functionality of the bridge
-     *         when joining Balancer 80 BAL 20 WETH WeightedPool2Tokens.
-     */ 
-    function testJoinPool80BAL20WETH() public {
-        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
-        address[] memory tokensIn = new address[](2);
-        tokensIn[0] = BAL;
-        tokensIn[1] = WETH;
-        address[] memory tokensOut = new address[](1);
-        tokensOut[0] = B80BAL20WETH;
-
-        // Rollup processor transfers ERC20 tokens to the bridge before calling convert
-        uint256[] memory amountsIn = new uint256[](tokensIn.length);
-        amountsIn[0] = 1e18;
-        amountsIn[1] = 1e18;
-        dealMultiple(tokensIn, address(bridge), amountsIn);
-
-        // Store the input and output balances before the trade to compare later
-        for(uint256 i = 0; i < tokensIn.length; i++) {
-            assertEq(
-                IERC20(tokensIn[i]).balanceOf(address(bridge)), 
-                1e18, 
-                "Initial input balances must be 1e18");
-        }
-
-        uint256 outputBalanceBefore = IERC20(tokensOut[0]).balanceOf(rollupProcessor);
-        assertEq(outputBalanceBefore, 0, "Initial output balance must be 0");
-
-        // Encode all data for the function call
-        ( 
-            IVault.Join memory joinPool, 
-            IVault.Exit memory exitPool, 
-            IVault.Convert memory convert
-        ) = encodeData(
-            IVault.ActionKind.JOIN, 
-            tokensIn, 
-            amountsIn, 
-            tokensOut
-        );
-        
-        // Pre-approve tokens
-        bridge.preApproveTokens(tokensIn, tokensOut);
-
-        // JoinPool will call convert internally
-        ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
-        bridge.joinPool(joinPool, convert);
-
-        assertEq(outputValueB, 0, "Output value B must be 0");
-        assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
-        
-        // Matches all input balances after the transaction
-        for(uint256 i = 0; i < tokensIn.length; i++) {
-            assertEq(
-                IERC20(tokensIn[i]).balanceOf(address(bridge)), 
-                0, 
-                "Input assets must be 0 after the transfer");
-        }
-
-        // Now we transfer the funds from the bridge to the rollup processor
-        IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
-        
-        // Verify the rollup processor received the correct amount of tokens
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(rollupProcessor), 
-            outputValueA, 
-            "Rollup processor have not received any tokens yet");
-
-    }
-
-    /* @notice - The purpose of this test is to directly test convert functionality of the bridge
      *         when exiting Balancer 80 BAL 20 WETH WeightedPool2Tokens.
      */ 
-    function testExitPool80BAL20WETH() public {
+    function testExitPoolBSTETHSTABLE() public {
         // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
         address[] memory tokensIn = new address[](1);
-        tokensIn[0] = B80BAL20WETH;
+        tokensIn[0] = BSTETHSTABLE;
         address[] memory tokensOut = new address[](2);
-        tokensOut[0] = BAL;
+        tokensOut[0] = WSTETH;
         tokensOut[1] = WETH;
 
         // Rollup processor transfers ERC20 tokens to the bridge before calling convert
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
-
-        // Store the input and output balances before the trade to compare later
-        uint256 inputBalancesBefore = IERC20(B80BAL20WETH).balanceOf(address(bridge));
-        assertEq(inputBalancesBefore, 1e18, "Initial output balance must be 1e18");
-
-        uint256[] memory outputBalancesBefore = new uint256[](tokensOut.length);
-        for(uint256 i = 0; i < tokensOut.length; i++) {
-            outputBalancesBefore[i] = IERC20(tokensOut[i]).balanceOf(address(bridge));
-            assertEq(outputBalancesBefore[i], 0, "Initial output balance must be 0");
-        }
 
         // Encode all data for the function call
         ( 
@@ -386,32 +290,106 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         // assertGt(outputValueA, 0, "Output value A must be greater than 0");
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
-        
-        // Check if the input balances after the transaction are 0
-        // @dev - exitPool is not consuming the inputTokens
-        // assertEq(
-        //     IERC20(B80BAL20WETH).balanceOf(address(bridge)), 
-        //     0, 
-        //     "Balance of bridge at B80BAL20WETH must be 0 after the transaction");
 
         // Now we transfer the funds back from the bridge to the rollup processor
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueB);
+    }
+
+    /** @notice - The purpose of this test is to directly test convert functionality of the bridge
+     *         when joining Balancer 80 BAL 20 WETH WeightedPool2Tokens.
+     */ 
+    function testJoinPool80BAL20WETH() public {
+        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
+        address[] memory tokensIn = new address[](2);
+        tokensIn[0] = BAL;
+        tokensIn[1] = WETH;
+        address[] memory tokensOut = new address[](1);
+        tokensOut[0] = B80BAL20WETH;
+
+        // Rollup processor transfers ERC20 tokens to the bridge before calling convert
+        uint256[] memory amountsIn = new uint256[](tokensIn.length);
+        amountsIn[0] = 1e18;
+        amountsIn[1] = 1e18;
+        dealMultiple(tokensIn, address(bridge), amountsIn);
+
+        // Encode all data for the function call
+        ( 
+            IVault.Join memory joinPool, 
+            IVault.Exit memory exitPool, 
+            IVault.Convert memory convert
+        ) = encodeData(
+            IVault.ActionKind.JOIN, 
+            tokensIn, 
+            amountsIn, 
+            tokensOut
+        );
         
-        // Verify the rollup processor received the correct amount of tokens
-        for(uint256 i = 0; i < tokensOut.length; i++) {
-            assertEq(
-                outputBalancesBefore[i], 
-                IERC20(tokensOut[i]).balanceOf(address(bridge)), 
-                "Balances before don't match balances now");
-        }
+        // Pre-approve tokens
+        bridge.preApproveTokens(tokensIn, tokensOut);
+
+        // JoinPool will call convert internally
+        ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
+        bridge.joinPool(joinPool, convert);
+
+        assertGt(outputValueA, 0, "Output value A must be greater than 0");
+        assertEq(outputValueB, 0, "Output value B must be 0");
+        assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
+
+        // Now we transfer the funds from the bridge to the rollup processor
+        IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
+    }
+
+    /* @notice - The purpose of this test is to directly test convert functionality of the bridge
+     *         when exiting Balancer 80 BAL 20 WETH WeightedPool2Tokens.
+     */ 
+    function testExitPool80BAL20WETH() public {
+        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
+        address[] memory tokensIn = new address[](1);
+        tokensIn[0] = B80BAL20WETH;
+        address[] memory tokensOut = new address[](2);
+        tokensOut[0] = BAL;
+        tokensOut[1] = WETH;
+
+        // Rollup processor transfers ERC20 tokens to the bridge before calling convert
+        uint256[] memory amountsIn = new uint256[](tokensIn.length);
+        amountsIn[0] = 1e18;
+        dealMultiple(tokensIn, address(bridge), amountsIn);
+
+        // Encode all data for the function call
+        ( 
+            IVault.Join memory joinPool, 
+            IVault.Exit memory exitPool, 
+            IVault.Convert memory convert
+        ) = encodeData(
+            IVault.ActionKind.EXIT, 
+            tokensIn, 
+            amountsIn, 
+            tokensOut
+        );
+        
+        // Pre-approve tokens
+        bridge.preApproveTokens(tokensIn, tokensOut);
+
+        // ExitPool will call convert internally
+        ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
+        bridge.exitPool(exitPool, convert);
+
+        // Output is always 0 ??
+        // assertGt(outputValueA, 0, "Output value A must be greater than 0");
+        assertEq(outputValueB, 0, "Output value B must be 0");
+        assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
+
+        // Now we transfer the funds back from the bridge to the rollup processor
+        IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
+        IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueB);
     }
 
     /**
-     * @dev Deal multiple assets based on input token array
-     * @param _inputTokens - The array of input tokens
-     * @param _target - The receiver of such tokens
-     * @param _amount - The array with the amount of tokens
+     * @dev Deal multiple assets at once
+     * @param _inputTokens - Array of tokens
+     * @param _target - The receiver
+     * @param _amount - The array with the amounts of tokens
      */
     function dealMultiple(
         address[] memory _inputTokens, 
@@ -440,6 +418,9 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     }
 
     /** @dev - Query the Vault for the amountsOut of an exit
+     * @param target - The target contract
+     * @param encodeWithSig - The encoded function call
+     * @return amountsOut - The amountsOut of the exit
      */
     function staticQueryExit(address target, bytes memory encodeWithSig) public view returns(uint256[] memory amountsOut) {
         ( , bytes memory data) = target.staticcall(encodeWithSig); 

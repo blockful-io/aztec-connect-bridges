@@ -254,6 +254,8 @@ interface IVault {
         view
         returns (IERC20[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
 
+    function balanceOf(address account) external view returns (uint256);
+
     /// @dev Returns the poolId for this pool
     /// @return The poolId for this pool
     function getPoolId() external view returns (bytes32);

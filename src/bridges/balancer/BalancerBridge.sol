@@ -78,7 +78,7 @@ contract BalancerBridge is BridgeBase {
      */
     function commitJoin(
         IVault.Join memory _joinPool
-    ) public returns (uint64 auxData) { 
+    ) internal returns (uint64 auxData) { 
         auxData = uint64(uint256(keccak256(abi.encode(_joinPool))));
         commitsJoin[auxData] = _joinPool;
         actions[auxData] = IVault.ActionKind.JOIN;
@@ -91,7 +91,7 @@ contract BalancerBridge is BridgeBase {
      */
     function commitExit(
         IVault.Exit memory _exitPool
-    ) public returns (uint64 auxData) { 
+    ) internal returns (uint64 auxData) { 
         auxData = uint64(uint256(keccak256(abi.encode(_exitPool))));
         commitsExit[auxData] = _exitPool;
         actions[auxData] = IVault.ActionKind.EXIT;
@@ -199,6 +199,7 @@ contract BalancerBridge is BridgeBase {
                 inputs.recipient,
                 inputs.request
             );
+            delete(commitsJoin[_auxData]);
         } else if(actions[_auxData] == IVault.ActionKind.EXIT) {
             IVault.Exit memory inputs = commitsExit[_auxData];
             paySubsidyJoinOrExit(inputs.poolId, IVault.ActionKind.EXIT, _rollupBeneficiary);            
@@ -212,6 +213,7 @@ contract BalancerBridge is BridgeBase {
             );
             outputValueA = outputValue[0];
             outputValueB = outputValue[1];
+            delete(commitsExit[_auxData]);
         } else {
             revert ErrorLib.InvalidAuxData();
         }
@@ -243,7 +245,7 @@ contract BalancerBridge is BridgeBase {
         (address poolAddr, ) = VAULT.getPool(_poolId);
         
         // then the balance, before and after the vault action,
-        outputValue = IERC20(poolAddr).balanceOf(_recipient) - outputValue;
+        outputValue = IERC20(poolAddr).balanceOf(_recipient);
 
         // check if the input is ETH
         bool isEth = false;
@@ -278,12 +280,12 @@ contract BalancerBridge is BridgeBase {
         address _recipient,
         IVault.ExitPoolRequest memory _request
     ) internal returns (uint256[] memory outputValue) {
-        // Load the tokens from the pool given its poolID
+        // Load the tokens from the pool, given its poolID
         (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_poolId);
 
+        // then set their balance, before and after the vault action
         outputValue = new uint256[](tokens.length);
         for(uint256 i = 0; i < tokens.length; i++) {
-            // then the balance, before and after the vault action,
             outputValue[i] = tokens[i].balanceOf(_recipient);
         }
 
@@ -323,13 +325,12 @@ contract BalancerBridge is BridgeBase {
         });
 
         IVault.FundManagement memory fundManagement = IVault.FundManagement({
-            sender: address(this), // the bridge has already received the tokens from the rollup so it owns totalInputValue of inputAssetA
+            sender: address(this), 
             fromInternalBalance: false,
-            recipient: payable(address(this)), // we want the output tokens transferred back to us
+            recipient: payable(address(this)),
             toInternalBalance: false
         });
 
-        // Swap
         outputValueA = VAULT.swap(
           singleSwap,
           fundManagement,
