@@ -161,13 +161,14 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     ) {
         tokenAddresses = new IERC20[](_trades.length+1);
 
-        for(uint256 i = 0; i < _trades.length; i++) {
-            if(i == 0){
-                tokenAddresses[i] = IERC20(_trades[i].tokenIn);
-                tokenAddresses[i+1] = IERC20(_trades[i].tokenOut);
+        for(uint256 i = 1; i < _trades.length+1; i++) {
+            if(i == 1){
+                tokenAddresses[i-1] = IERC20(_trades[i-1].tokenIn);
+                tokenAddresses[i] = IERC20(_trades[i-1].tokenOut);
             } else {
-                tokenAddresses[i] = IERC20(_trades[i].tokenOut);
+                tokenAddresses[i] = IERC20(_trades[i-1].tokenOut);
             }
+
         }
 
         IVault.BatchSwapStep[] memory swaps = new IVault.BatchSwapStep[](_trades.length);
@@ -177,7 +178,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
                 assetInIndex: i,
                 assetOutIndex: i+1,
                 amount: _trades[i].amount,
-                userData: '0x'
+                userData: ''
             });
         }    
     
@@ -191,7 +192,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         int256[] memory limits = new int256[](tokenAddresses.length);
         for(uint i = 0; i < limits.length;) {
-            limits[i] = 2**255-1;
+            limits[i] = type(int256).max;
             unchecked {
                 i++;
             }
@@ -203,7 +204,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             assets: bridge._asIAsset(tokenAddresses),
             funds: fundManagement,
             limits: limits,
-            deadline: 2**256-1
+            deadline: type(uint256).max
         });
 
         // We must wrap the convert request in a struct to avoid deepstack
@@ -249,10 +250,10 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     ) public {
         // Set tokens to be swapped and amountsIn, also dealing the tokens to the bridge
         address[] memory tokensIn = new address[](2);
-        tokensIn[0] = WETH;
-        tokensIn[1] = BAL;
+        tokensIn[0] = BAL;
+        tokensIn[1] = WETH;
         address[] memory tokensOut = new address[](2);
-        tokensOut[0] = BAL;
+        tokensOut[0] = WETH;
         tokensOut[1] = WSTETH;
         address[] memory poolAddr = new address[](2);
         poolAddr[1] = B80BAL20WETH;
@@ -280,7 +281,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             allTokens[i] = address(tokenAddresses[i]);
         }
         address[] memory emptyList = new address[](0);
-        bridge.preApproveTokens(allTokens, emptyList);
+        bridge.preApproveTokens(allTokens, allTokens);
 
         // Swap will call convert internally
         (

@@ -41,8 +41,7 @@ contract BalancerBridge is BridgeBase {
      *  reason the following is not a security risk and makes convert(...) function more gas efficient.
      */
     function preApproveTokens(
-        address[] calldata _tokensIn
-        , address[] calldata _tokensOut
+        address[] calldata _tokensIn, address[] calldata _tokensOut
     ) external {
         for (uint256 i = 0; i < _tokensIn.length;) {
             if(address(0) == _tokensIn[i]) {
@@ -294,11 +293,14 @@ contract BalancerBridge is BridgeBase {
         } else if(actions[_auxData] == IVault.ActionKind.BATCHSWAP) {
             IVault.BatchSwap memory inputs = commitsBatchSwap[_auxData];
 
-            int256[] memory outputValues = 
-            batchSwap(
-                inputs
-            );
+            int256[] memory result = 
+            batchSwap(inputs);
             
+            uint256[] memory outputValues =
+            convertIntToUint(result);
+
+            outputValueA = outputValues[0];
+            outputValueB = outputValues[1];
 
             delete(commitsBatchSwap[_auxData]); 
         } else {
@@ -306,6 +308,19 @@ contract BalancerBridge is BridgeBase {
         }
         delete(actions[_auxData]);
     }
+
+    function convertIntToUint(
+        int256[] memory intArray
+    ) internal pure returns (
+        uint256[] memory
+    ) {
+        uint256[] memory uintArray = new uint256[](intArray.length);
+        for (uint256 i = 0; i < intArray.length; i++) {
+            uintArray[i] = uint256(intArray[i]);
+        }
+        return uintArray;
+    }
+
 
     /**
      * @notice A function which returns an amount of _outputAssetA
