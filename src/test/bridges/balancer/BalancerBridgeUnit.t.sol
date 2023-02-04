@@ -11,7 +11,7 @@ import {ErrorLib} from "../../../bridges/base/ErrorLib.sol";
 // balancer-specific imports
 import {IBalancerQueries} from "../../../interfaces/balancer/IBalancerQueries.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IVault, IAsset, PoolSpecialization, JoinKind, ExitKind} from "../../../interfaces/balancer/IVault.sol";
+import {IVault, IAsset} from "../../../interfaces/balancer/IVault.sol";
 
 import "forge-std/Test.sol";
 
@@ -293,7 +293,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             "Rollup should should receive the output from the bridge");
     }
 
-    /** @notice - The purpose of this test is to directly test convert functionality of the bridge
+    /**
+     *  @notice - The purpose of this test is to directly test convert functionality of the bridge
      *         when joining Balancer rETH Stable Pool.
      */ 
     function testJoinPoolBRETHSTABLE(        
@@ -497,9 +498,9 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         //      static queries on-chain.
         bytes memory userData;
         if(_actionType == IVault.ActionKind.JOIN)
-            userData = abi.encode(JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, _amountsIn);
+            userData = abi.encode(IVault.JoinKind.EXACT_TOKENS_IN_FOR_BPT_OUT, _amountsIn);
         else
-            userData = abi.encode(ExitKind.EXACT_BPT_IN_FOR_TOKENS_OUT, _amountsIn);
+            userData = abi.encode(IVault.ExitKind.EXACT_BPT_IN_FOR_TOKENS_OUT, _amountsIn);
 
         // @dev There will always be only 1 issued token per pool.
         //      Which means we can asume that index0 in the arrays tokensIn and Out will be the target pool
@@ -779,7 +780,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         }        
     }
 
-    /** @dev - Query the Vault for the amountsOut of an exit
+    /** 
+     * @dev - Query the Vault for the amountsOut of an exit
      *         Currently not working, check encodeJoinOrExit
      * @param _target - The target contract
      * @param _encodeWithSig - The encoded function call

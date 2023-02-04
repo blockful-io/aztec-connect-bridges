@@ -8,7 +8,7 @@ import {ISubsidy} from "../../aztec/interfaces/ISubsidy.sol";
 import {ErrorLib} from "../base/ErrorLib.sol";
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {IVault, IAsset, JoinKind, ExitKind} from "../../interfaces/balancer/IVault.sol";
+import {IVault, IAsset} from "../../interfaces/balancer/IVault.sol";
 
 /**
  * @title - Balancer Bridge Contract.
@@ -18,10 +18,10 @@ import {IVault, IAsset, JoinKind, ExitKind} from "../../interfaces/balancer/IVau
 contract BalancerBridge is BridgeBase {
     IVault public constant VAULT = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
 
-    // @dev - Vault actions must be stored an accessed within the same transaction.
+    // @dev - Vault actions inthis bridge must be stored/deketed within the same tx.
     //        It's done in this way because Balancer handles more tokens and more
     //        complex data than the rollup processor is used to. Without altering
-    //        the core mechanics of the bridge, the only other option is to hardcode
+    //        the core mechanics of the rollup, the only other option is to hardcode
     //        most of the commom vault action.
     mapping(uint64=>IVault.Join) private commitsJoin;
     mapping(uint64=>IVault.Exit) private commitsExit;
@@ -48,33 +48,25 @@ contract BalancerBridge is BridgeBase {
     function preApproveTokens(
         address[] calldata _tokensIn, address[] calldata _tokensOut
     ) external {
-        for (uint256 i = 0; i < _tokensIn.length;) {
+        for (uint i = 0; i < _tokensIn.length;) {
             if(address(0) == _tokensIn[i]) {
-                unchecked {
-                    ++i;
-                }
+                unchecked { ++i; }
                 continue;
             }
             address tokenIn = _tokensIn[i];
             IERC20(tokenIn).approve(address(VAULT), 0);
             IERC20(tokenIn).approve(address(VAULT), type(uint256).max);
-            unchecked {
-                ++i;
-            }
+            unchecked { ++i; }
         }
-        for (uint256 i = 0; i < _tokensOut.length;) {
+        for (uint i = 0; i < _tokensOut.length;) {
             if(address(0) == _tokensOut[i]) {
-                unchecked {
-                    ++i;
-                }
+                unchecked { ++i; }
                 continue;
             }
             address tokenOut = _tokensOut[i];
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), 0);
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), type(uint256).max);
-            unchecked {
-                ++i;
-            }
+            unchecked { ++i; }
         }
     }
 
@@ -280,7 +272,7 @@ contract BalancerBridge is BridgeBase {
                 commitsJoin[_auxData].poolId, 
                 IVault.ActionKind.JOIN, 
                 _rollupBeneficiary);
-                
+
             outputValueA = joinPool(commitsJoin[_auxData]);
             delete(commitsJoin[_auxData]);
 
@@ -290,9 +282,10 @@ contract BalancerBridge is BridgeBase {
                 commitsExit[_auxData].poolId, 
                 IVault.ActionKind.EXIT, 
                 _rollupBeneficiary);            
-            uint256[] memory outputValue = exitPool(commitsExit[_auxData]); 
 
+            uint256[] memory outputValue = exitPool(commitsExit[_auxData]); 
             delete(commitsExit[_auxData]);
+
             // Temporarily solution for the bridge size limitation
             outputValueA = outputValue[0];
             outputValueB = outputValue[1];
@@ -331,10 +324,11 @@ contract BalancerBridge is BridgeBase {
         // @dev - Was checking if the input is eth, but I don't
         //        think Balancer supports ETH as an input
         bool isEth = false;
-        for(uint256 i = 0; i < _inputs.request.assets.length; i++) {
+        for(uint i = 0; i < _inputs.request.assets.length;) {
             if(_inputs.request.assets[i] == IAsset(address(0))) {
                 isEth = true;
             }
+            unchecked { i++; }
         }
 
         VAULT.joinPool{value: isEth ? msg.value : 0}(
@@ -448,8 +442,9 @@ contract BalancerBridge is BridgeBase {
         address[] memory poolTokens = new address[](tokens.length);
 
         // Change from IERC20 to address and add to the array
-        for(uint256 i = 0; i < tokens.length; i++) {
+        for(uint i = 0; i < tokens.length;) {
             poolTokens[i] = address(tokens[i]);
+            unchecked { i++; }
         }
 
         // The pool issue an ERC20 which is the output of 
@@ -499,12 +494,14 @@ contract BalancerBridge is BridgeBase {
     ) {
         bytes memory encoded;
 
-        for(uint256 i = 0; i < _inputTokens.length; i++) {
+        for(uint i = 0; i < _inputTokens.length;) {
             encoded = abi.encodePacked(encoded, _inputTokens[i]);
+            unchecked { i++; }
         }
 
-        for(uint256 i = 0; i < _outputTokens.length; i++) {
+        for(uint i = 0; i < _outputTokens.length;) {
             encoded = abi.encodePacked(encoded, _outputTokens[i]);
+            unchecked { i++; }
         }
 
         return uint256(keccak256(encoded));

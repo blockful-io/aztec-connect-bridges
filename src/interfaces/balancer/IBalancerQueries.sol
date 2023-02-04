@@ -35,16 +35,17 @@ import "./IVault.sol";
  * structs for simplicity.
  */
 interface IBalancerQueries {
-    function querySwap(IVault.SingleSwap memory singleSwap, IVault.FundManagement memory funds)
-        external
-        returns (uint256);
+    function querySwap(
+        IVault.SingleSwap memory singleSwap, 
+        IVault.FundManagement memory funds
+    ) external returns (uint256);
 
-    // function queryBatchSwap(
-    //     IVault.SwapKind kind,
-    //     IVault.BatchSwapStep[] memory swaps,
-    //     IAsset[] memory assets,
-    //     IVault.FundManagement memory funds
-    // ) external returns (int256[] memory assetDeltas);
+    function queryBatchSwap(
+        IVault.SwapKind kind,
+        IVault.BatchSwapStep[] memory swaps,
+        IAsset[] memory assets,
+        IVault.FundManagement memory funds
+    ) external returns (int256[] memory assetDeltas);
 
     function queryJoin(
         bytes32 poolId,
