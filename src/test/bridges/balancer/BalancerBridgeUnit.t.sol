@@ -471,6 +471,11 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         IVault.Exit memory exitPool,
         IVault.Convert memory convert
     ) {
+        require( // Sanity check
+            _actionType == IVault.ActionKind.JOIN || 
+            _actionType == IVault.ActionKind.EXIT, 
+            "Invalid action type");
+            
         // We must wrap the convert request in a struct to avoid deepstack
         // This could be hardcoded, but we are doing it dynamically to avoid
         convert = IVault.Convert({
@@ -482,11 +487,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             interactionNonce: 0,
             rollupBeneficiary: BENEFICIARY
         });
-
-        require( // Sanity check
-            _actionType == IVault.ActionKind.JOIN || 
-            _actionType == IVault.ActionKind.EXIT, 
-            "Invalid action type");
 
         // Convert IERC20 to IAsset
         IERC20[] memory tokens = asIERC20(_actionType == IVault.ActionKind.JOIN ? _tokensIn : _tokensOut);
