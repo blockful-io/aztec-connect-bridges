@@ -89,7 +89,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         bytes32 poolId = IVault(B80BAL20WETH).getPoolId();
 
         ( 
-            IVault.SingleSwap memory singleSwap,
+            IVault.Swap memory swap,
             IVault.Convert memory convert
         ) = encodeSwap(
             poolId,
@@ -105,7 +105,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             uint256 outputValueB,
             bool isAsync
         ) = bridge.swap(
-            singleSwap, 
+            swap, 
             convert);
 
         assertGt(outputValueA, 0, "OutputValueA must be greater than 0");
@@ -475,7 +475,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             _actionType == IVault.ActionKind.JOIN || 
             _actionType == IVault.ActionKind.EXIT, 
             "Invalid action type");
-            
+
         // We must wrap the convert request in a struct to avoid deepstack
         // This could be hardcoded, but we are doing it dynamically to avoid
         convert = IVault.Convert({
@@ -592,7 +592,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      * @param _inputAssetA - The input asset
      * @param _outputAssetA - The output asset
      * @param _totalInputValue - The total input value
-     * @return singleSwap - The single swap struct
+     * @return swap - The single swap struct
      * @return convert - The convert struct
      */
     function encodeSwap(
@@ -602,7 +602,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         address _outputAssetA, 
         uint256 _totalInputValue
     ) public view returns (
-        IVault.SingleSwap memory singleSwap,
+        IVault.Swap memory swap,
         IVault.Convert memory convert
     ) {
         // We must wrap the convert request in a struct to avoid deepstack
@@ -615,7 +615,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             interactionNonce: 0,
             rollupBeneficiary: BENEFICIARY
         });
-        singleSwap = IVault.SingleSwap({
+
+        IVault.SingleSwap memory singleSwap = IVault.SingleSwap({
             poolId: _poolId,
             kind: _kind,
             assetIn: IAsset(_inputAssetA),
@@ -623,6 +624,21 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             amount: _totalInputValue,
             userData: ""
         });
+
+        IVault.FundManagement memory fundManagement = IVault.FundManagement({
+            sender: address(bridge), 
+            fromInternalBalance: false,
+            recipient: payable(address(bridge)),
+            toInternalBalance: false
+        });
+
+        swap = IVault.Swap({
+            singleSwap: singleSwap,
+            funds: fundManagement,
+            limit: 0,
+            deadline: block.timestamp
+        });
+
     }
 
     /**

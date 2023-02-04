@@ -25,7 +25,7 @@ contract BalancerBridge is BridgeBase {
     //        most of the commom vault action.
     mapping(uint64=>IVault.Join) private commitsJoin;
     mapping(uint64=>IVault.Exit) private commitsExit;
-    mapping(uint64=>IVault.SingleSwap) private commitsSwap;
+    mapping(uint64=>IVault.Swap) private commitsSwap;
     mapping(uint64=>IVault.BatchSwap) private commitsBatchSwap;
     mapping(uint64=>IVault.ActionKind) private actions;
  
@@ -111,7 +111,7 @@ contract BalancerBridge is BridgeBase {
      * @return auxData - The hash in uint64
      */
     function commitSwap(
-        IVault.SingleSwap calldata _swap
+        IVault.Swap calldata _swap
     ) internal returns (
         uint64 auxData
     ) { 
@@ -198,7 +198,7 @@ contract BalancerBridge is BridgeBase {
      *  @return async - True if the vault action is async 
      */
     function swap(
-        IVault.SingleSwap calldata _swap,
+        IVault.Swap calldata _swap,
         IVault.Convert calldata _convert
     ) public payable returns (
         uint256 outputValueA, 
@@ -211,7 +211,7 @@ contract BalancerBridge is BridgeBase {
             _convert.inputAssetB,
             _convert.outputAssetA,
             _convert.outputAssetB,
-            _swap.amount,
+            _swap.singleSwap.amount,
             _convert.interactionNonce,
             commitSwap(_swap),
             _convert.rollupBeneficiary
@@ -273,59 +273,40 @@ contract BalancerBridge is BridgeBase {
         uint256 outputValueA, 
         uint256 outputValueB, 
         bool
-    ) {                
-        // Load the inputs for the vault action
-        if(actions[_auxData] == IVault.ActionKind.JOIN) {
-            IVault.Join memory inputs = commitsJoin[_auxData];
+    ) {   
+        if( actions[_auxData] == IVault.ActionKind.JOIN ) {
+
             paySubsidyJoinOrExit(
-                inputs.poolId, 
+                commitsJoin[_auxData].poolId, 
                 IVault.ActionKind.JOIN, 
                 _rollupBeneficiary);
-
-            outputValueA = 
-            joinPool(
-                inputs.poolId,
-                inputs.sender,
-                inputs.recipient,
-                inputs.request
-            );
+                
+            outputValueA = joinPool(commitsJoin[_auxData]);
             delete(commitsJoin[_auxData]);
-        } else if(actions[_auxData] == IVault.ActionKind.EXIT) {
-            IVault.Exit memory inputs = commitsExit[_auxData];
+
+        } else if( actions[_auxData] == IVault.ActionKind.EXIT ) {
+
             paySubsidyJoinOrExit(
-                inputs.poolId, 
+                commitsExit[_auxData].poolId, 
                 IVault.ActionKind.EXIT, 
                 _rollupBeneficiary);            
-            
-            uint256[] memory outputValue = 
-            exitPool(
-                inputs.poolId,
-                inputs.sender,
-                inputs.recipient,
-                inputs.request
-            );
+            uint256[] memory outputValue = exitPool(commitsExit[_auxData]); 
+
+            delete(commitsExit[_auxData]);
+            // Temporarily solution for the bridge size limitation
             outputValueA = outputValue[0];
             outputValueB = outputValue[1];
-            delete(commitsExit[_auxData]);
-        } else if(actions[_auxData] == IVault.ActionKind.SWAP) {
-            IVault.SingleSwap memory inputs = commitsSwap[_auxData];
 
-            outputValueA = 
-            singleSwap(
-                inputs.poolId, 
-                inputs.kind,
-                inputs.assetIn,
-                inputs.assetOut, 
-                _totalInputValue
-            );
+        } else if( actions[_auxData] == IVault.ActionKind.SWAP ) {
+
+            outputValueA = singleSwap(commitsSwap[_auxData]);
             delete(commitsBatchSwap[_auxData]);
-        } else if(actions[_auxData] == IVault.ActionKind.BATCHSWAP) {
-            IVault.BatchSwap memory inputs = commitsBatchSwap[_auxData];
 
-            outputValueA = 
-            batchSwap(inputs);            
+        } else if( actions[_auxData] == IVault.ActionKind.BATCHSWAP ) {
 
+            outputValueA = batchSwap(commitsBatchSwap[_auxData]);            
             delete(commitsBatchSwap[_auxData]); 
+
         } else {
             revert ErrorLib.InvalidAuxData();
         }
@@ -333,125 +314,86 @@ contract BalancerBridge is BridgeBase {
     }
 
     /** @notice - Calls joinPool on Balancer Vault
-     *  @param _poolId - The poolId of the pool to join
-     *  @param _sender - The address which will send the tokens to the pool
-     *  @param _recipient - The address which will receive the pool tokens
-     *  @param _request - The request struct
+     *  @param _inputs - The inputs struct
      *  @return outputValue - the amount of output asset to return
      */
     function joinPool(
-        bytes32 _poolId,
-        address _sender,
-        address _recipient,
-        IVault.JoinPoolRequest memory _request
+        IVault.Join memory _inputs
     ) internal returns (
         uint256 outputValue
     ) {
         // Get the address of the pool
-        (address poolAddr, ) = VAULT.getPool(_poolId);
+        (address poolAddr, ) = VAULT.getPool(_inputs.poolId);
         
-        // then the balance, before and after the vault action,
-        outputValue = IERC20(poolAddr).balanceOf(_recipient);
+        // Then the balance, before and after the vault action
+        outputValue = IERC20(poolAddr).balanceOf(_inputs.recipient);
 
-        // check if the input is ETH
+        // @dev - Was checking if the input is eth, but I don't
+        //        think Balancer supports ETH as an input
         bool isEth = false;
-        for(uint256 i = 0; i < _request.assets.length; i++) {
-            if(_request.assets[i] == IAsset(address(0))) {
+        for(uint256 i = 0; i < _inputs.request.assets.length; i++) {
+            if(_inputs.request.assets[i] == IAsset(address(0))) {
                 isEth = true;
             }
         }
 
         VAULT.joinPool{value: isEth ? msg.value : 0}(
-          _poolId,
-          _sender,
-          _recipient,
-          _request
+          _inputs.poolId,
+          _inputs.sender,
+          _inputs.recipient,
+          _inputs.request
         );
 
-        // to calculate the output value
-        outputValue = IERC20(poolAddr).balanceOf(_recipient) - outputValue;
+        outputValue = IERC20(poolAddr).balanceOf(_inputs.recipient) - outputValue;
     }
 
     /** @notice - Calls exitPool on Balancer Vault
-     *  @param _poolId - The poolId of the pool to join
-     *  @param _sender - The address which will send the tokens to the pool
-     *  @param _recipient - The address which will receive the pool tokens
-     *  @param _request - The request struct
+     *  @param _inputs - The inputs struct
      *  @return outputValue - the amount of output asset to return
      */
     function exitPool(
-        bytes32 _poolId,
-        address _sender,
-        address _recipient,
-        IVault.ExitPoolRequest memory _request
+        IVault.Exit memory _inputs
     ) internal returns (
         uint256[] memory outputValue
     ) {
         // Load the tokens from the pool, given its poolID
-        (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_poolId);
+        (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_inputs.poolId);
 
         // then set their balance, before and after the vault action
         outputValue = new uint256[](tokens.length);
-        for(uint256 i = 0; i < tokens.length;) {
-            outputValue[i] = tokens[i].balanceOf(_recipient);
-            unchecked {
-                i++;
-            }
+        for(uint i = 0; i < tokens.length;) {
+            outputValue[i] = tokens[i].balanceOf(_inputs.recipient);
+            unchecked { i++; }
         }
-        IERC20(address(_request.assets[0])).approve(address(VAULT), 10e18);
-        uint256 allowance = IERC20(address(_request.assets[0])).allowance(_sender, address(VAULT));
-        require(allowance > 0,"no allowance");
+        IERC20( address(_inputs.request.assets[0]) ).approve(address(VAULT), type(uint256).max);
 
         VAULT.exitPool(
-            _poolId,
-            _sender,
-            payable(_recipient),
-            _request
+            _inputs.poolId,
+            _inputs.sender,
+            payable(_inputs.recipient),
+            _inputs.request
         );
 
-        for(uint256 i = 0; i < tokens.length; i++) {
-            outputValue[i] = tokens[i].balanceOf(_recipient) - outputValue[i];
+        for(uint i = 0; i < tokens.length; ) {
+            outputValue[i] = tokens[i].balanceOf(_inputs.recipient) - outputValue[i];
+            unchecked { i++; }
         }
     }
 
     /** @notice - Calls singleSwap on Balancer Vault
-     *  @param _poolId - The poolId for the swap
-     *  @param _kind - kind of the trade
-     *  @param _inputAsset - The erc20 token provided
-     *  @param _outputAsset - The token received from the vault
-     *  @param _totalInputValue - The amount of _inputAssetA to swap
-     *  @return outputValueA - the amount of output assets returned
+     *  @param _swap - The swap struct
+     *  @return outputValueA - the amount of output asset
      */
     function singleSwap(
-        bytes32 _poolId, 
-        IVault.SwapKind _kind,
-        IAsset _inputAsset, 
-        IAsset _outputAsset, 
-        uint256 _totalInputValue
+        IVault.Swap memory _swap
     ) internal returns (
         uint256 outputValueA
     ) {
-        IVault.SingleSwap memory swap = IVault.SingleSwap({
-            poolId: _poolId,
-            kind: _kind,
-            assetIn: _inputAsset,
-            assetOut: _outputAsset,
-            amount: _totalInputValue,
-            userData: ""
-        });
-
-        IVault.FundManagement memory fundManagement = IVault.FundManagement({
-            sender: address(this), 
-            fromInternalBalance: false,
-            recipient: payable(address(this)),
-            toInternalBalance: false
-        });
-
         outputValueA = VAULT.swap(
-          swap,
-          fundManagement,
-          0,
-          block.timestamp
+            _swap.singleSwap,
+            _swap.funds,
+            _swap.limit,
+            _swap.deadline
         );
     }
 

@@ -184,11 +184,19 @@ interface IVault {
      *
      * Emits a `Swap` event.
      */
-    function swap(SingleSwap memory singleSwap, FundManagement memory funds, uint256 limit, uint256 deadline)
-        external
-        payable
-        returns (uint256);
+    function swap(
+        SingleSwap memory singleSwap, 
+        FundManagement memory funds, 
+        uint256 limit, 
+        uint256 deadline
+    ) external payable returns (uint256);
 
+    struct Swap {
+        SingleSwap singleSwap;
+        FundManagement funds;
+        uint256 limit;
+        uint256 deadline;
+    }
     /**
      * @dev Data for a single swap executed by `swap`. `amount` is either `amountIn` or `amountOut` depending on
      * the `kind` value.
