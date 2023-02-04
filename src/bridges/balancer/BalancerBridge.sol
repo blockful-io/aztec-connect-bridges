@@ -362,15 +362,23 @@ contract BalancerBridge is BridgeBase {
         address _sender,
         address _recipient,
         IVault.ExitPoolRequest memory _request
-    ) internal returns (uint256[] memory outputValue) {
+    ) internal returns (
+        uint256[] memory outputValue
+    ) {
         // Load the tokens from the pool, given its poolID
         (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_poolId);
 
         // then set their balance, before and after the vault action
         outputValue = new uint256[](tokens.length);
-        for(uint256 i = 0; i < tokens.length; i++) {
+        for(uint256 i = 0; i < tokens.length;) {
             outputValue[i] = tokens[i].balanceOf(_recipient);
+            unchecked {
+                i++;
+            }
         }
+        IERC20(address(_request.assets[0])).approve(vaultAddr, 10e18);
+        uint256 allowance = IERC20(address(_request.assets[0])).allowance(_sender, address(VAULT));
+        require(allowance > 0,"no allowance");
 
         VAULT.exitPool(
             _poolId,
@@ -426,10 +434,7 @@ contract BalancerBridge is BridgeBase {
 
     function batchSwap(
         IVault.BatchSwap memory _swap
-    ) internal returns (uint256 outputValueA) {
-
-        // IERC20(address(_swap.assets[0])).approve(vaultAddr, type(uint256).max);
-        
+    ) internal returns (uint256 outputValueA) {   
         // @dev
         // int256 uses a delta to return values, but Aztec only return uint256
         // Measuring the balance is a turn around.
