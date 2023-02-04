@@ -292,10 +292,19 @@ contract BalancerBridge is BridgeBase {
 
         } else if( actions[_auxData] == IVault.ActionKind.SWAP ) {
 
+            paySubsidySwap(
+                address(commitsSwap[_auxData].singleSwap.assetIn),
+                address(commitsSwap[_auxData].singleSwap.assetOut),
+                _rollupBeneficiary);
+
             outputValueA = singleSwap(commitsSwap[_auxData]);
             delete(commitsBatchSwap[_auxData]);
 
         } else if( actions[_auxData] == IVault.ActionKind.BATCHSWAP ) {
+
+            paySubsidyBatchSwap(
+                commitsBatchSwap[_auxData].assets,
+                _rollupBeneficiary);
 
             outputValueA = batchSwap(commitsBatchSwap[_auxData]);            
             delete(commitsBatchSwap[_auxData]); 
@@ -468,6 +477,39 @@ contract BalancerBridge is BridgeBase {
         }
     }
 
+    /** @notice - Calculate and claim subsidy for a swap
+     *  @param _tokensIn - The tokenIn that has amount
+     *  @param _tokensOut - The tokenOut that will be received
+     *  @param _rollupBeneficiary - The address of the rollup beneficiary
+     */
+    function paySubsidySwap(
+        address _tokensIn,
+        address _tokensOut,
+        address _rollupBeneficiary
+    ) public {
+        SUBSIDY.claimSubsidy(
+            _computeCriteria(_tokensIn, _tokensOut),
+            _rollupBeneficiary
+        );
+    }
+
+    /** @notice - Calculate and claim subsidy for a batchSwap
+     *  @param _assets - The assets that are being swapped
+     *  @param _rollupBeneficiary - The address of the rollup beneficiary
+     *  @dev - We are assuming the first token is the input and the last is the output
+     *         It must be better elaborated in the future to handle more rich swaps
+     */
+    function paySubsidyBatchSwap(
+        IAsset[] memory _assets,
+        address _rollupBeneficiary
+    ) public {
+        SUBSIDY.claimSubsidy(
+            _computeCriteria(
+                address(_assets[0]), 
+                address(_assets[_assets.length-1])),
+            _rollupBeneficiary
+        );
+    }
     /** @notice - Registers subsidy criteria for a given token pair
      *  @param _criteria - The criteria to register
      */
