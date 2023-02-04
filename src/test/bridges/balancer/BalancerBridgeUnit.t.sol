@@ -156,10 +156,9 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         IVault.Trade[] memory _trades
     ) public view returns (
         IVault.BatchSwap memory batchSwap, 
-        IVault.Convert memory convert,
-        IERC20[] memory tokenAddresses
+        IVault.Convert memory convert
     ) {
-        tokenAddresses = new IERC20[](_trades.length+1);
+        IERC20[] memory tokenAddresses = new IERC20[](_trades.length+1);
 
         for(uint256 i = 1; i < _trades.length+1; i++) {
             if(i == 1){
@@ -189,17 +188,13 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             toInternalBalance: false
         });
 
-
         int256[] memory limits = new int256[](tokenAddresses.length);
-        // for(uint i = 0; i < limits.length;) {
-        //     limits[i] = type(int256).max;
-        //     unchecked {
-        //         i++;
-        //     }
-        // }
-        limits[0] = 10e18;
-        limits[1] = 10e18;
-        limits[2] = -997889356;
+        for(uint i = 0; i < limits.length;) {
+            limits[i] = type(int256).max;
+            unchecked {
+                i++;
+            }
+        }
 
         batchSwap = IVault.BatchSwap({
             kind: _kind,
@@ -220,7 +215,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             interactionNonce: 0,
             rollupBeneficiary: BENEFICIARY
         });
-
     }
 
     function makeTrades(
@@ -269,13 +263,15 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         ( 
             IVault.BatchSwap memory batchSwap,
-            IVault.Convert memory convert,
-            IERC20[] memory tokenAddresses
+            IVault.Convert memory convert
         ) 
           = encodeBatchSwap(
             IVault.SwapKind.GIVEN_IN,
             trades
           );
+
+        // Pre-approve tokens
+        bridge.preApproveTokens(tokensIn, tokensOut);
 
         // Swap will call convert internally
         (
@@ -298,7 +294,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
         assertEq(
-            IERC20(tokensOut[1]).balanceOf(address(bridge)), 
+            IERC20(tokensOut[1]).balanceOf(rollupProcessor), 
             outputValueA, 
             "bridge must have balance must be greater than 0");
 

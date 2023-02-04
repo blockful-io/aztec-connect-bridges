@@ -301,8 +301,7 @@ contract BalancerBridge is BridgeBase {
             IVault.BatchSwap memory inputs = commitsBatchSwap[_auxData];
 
             outputValueA = 
-            batchSwap(inputs);
-            
+            batchSwap(inputs);            
 
             delete(commitsBatchSwap[_auxData]); 
         } else {
@@ -429,7 +428,7 @@ contract BalancerBridge is BridgeBase {
         IVault.BatchSwap memory _swap
     ) internal returns (uint256 outputValueA) {
 
-        IERC20(address(_swap.assets[0])).approve(vaultAddr, type(uint256).max);
+        // IERC20(address(_swap.assets[0])).approve(vaultAddr, type(uint256).max);
         
         // @dev
         // int256 uses a delta to return values, but Aztec only return uint256
@@ -449,7 +448,6 @@ contract BalancerBridge is BridgeBase {
         uint256 balanceAfter = 
         IERC20(address(_swap.assets[_swap.assets.length-1])).balanceOf(address(this));
     
-        IERC20(address(_swap.assets[0])).approve(ROLLUP_PROCESSOR, type(uint256).max);
         outputValueA = balanceAfter - balanceBefore;
     }
 
