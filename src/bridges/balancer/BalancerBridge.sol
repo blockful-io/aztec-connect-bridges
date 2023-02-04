@@ -175,9 +175,16 @@ contract BalancerBridge is BridgeBase {
     function batchSwap(
         IVault.BatchSwap calldata _batchSwap,
         IVault.Convert calldata _convert
-    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
-       ( outputValueA, outputValueB, async ) = 
-        convert(
+    ) public payable returns (
+        uint256 outputValueA,
+        uint256 outputValueB,
+        bool async
+    ) {
+        ( 
+            outputValueA,
+            outputValueB,
+            async
+        ) = convert(
             _convert.inputAssetA,
             _convert.inputAssetB,
             _convert.outputAssetA,
@@ -293,14 +300,9 @@ contract BalancerBridge is BridgeBase {
         } else if(actions[_auxData] == IVault.ActionKind.BATCHSWAP) {
             IVault.BatchSwap memory inputs = commitsBatchSwap[_auxData];
 
-            int256[] memory result = 
+            outputValueA = 
             batchSwap(inputs);
             
-            uint256[] memory outputValues =
-            convertIntToUint(result);
-
-            outputValueA = outputValues[0];
-            outputValueB = outputValues[1];
 
             delete(commitsBatchSwap[_auxData]); 
         } else {
@@ -308,19 +310,6 @@ contract BalancerBridge is BridgeBase {
         }
         delete(actions[_auxData]);
     }
-
-    function convertIntToUint(
-        int256[] memory intArray
-    ) internal pure returns (
-        uint256[] memory
-    ) {
-        uint256[] memory uintArray = new uint256[](intArray.length);
-        for (uint256 i = 0; i < intArray.length; i++) {
-            uintArray[i] = uint256(intArray[i]);
-        }
-        return uintArray;
-    }
-
 
     /**
      * @notice A function which returns an amount of _outputAssetA
@@ -438,9 +427,17 @@ contract BalancerBridge is BridgeBase {
 
     function batchSwap(
         IVault.BatchSwap memory _swap
-    ) internal returns (int256[] memory outputValueA) {
+    ) internal returns (uint256 outputValueA) {
 
-        outputValueA = VAULT.batchSwap(
+        IERC20(address(_swap.assets[0])).approve(vaultAddr, type(uint256).max);
+        
+        // @dev
+        // int256 uses a delta to return values, but Aztec only return uint256
+        // Measuring the balance is a turn around.
+        uint256 balanceBefore = 
+        IERC20(address(_swap.assets[_swap.assets.length-1])).balanceOf(address(this));
+
+        VAULT.batchSwap(
             _swap.kind,
             _swap.swaps,
             _swap.assets,
@@ -448,6 +445,12 @@ contract BalancerBridge is BridgeBase {
             _swap.limits,
             _swap.deadline
         );
+
+        uint256 balanceAfter = 
+        IERC20(address(_swap.assets[_swap.assets.length-1])).balanceOf(address(this));
+    
+        IERC20(address(_swap.assets[0])).approve(ROLLUP_PROCESSOR, type(uint256).max);
+        outputValueA = balanceAfter - balanceBefore;
     }
 
     /**

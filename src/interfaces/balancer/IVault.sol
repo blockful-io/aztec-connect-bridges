@@ -330,6 +330,17 @@ interface IVault {
         view
         returns (IERC20[] memory tokens, uint256[] memory balances, uint256 lastChangeBlock);
 
+    /**
+     * @dev Allows `relayer` to act as a relayer for `sender` if `approved` is true, and disallows it otherwise.
+     *
+     * Emits a `RelayerApprovalChanged` event.
+     */
+    function setRelayerApproval(
+        address sender,
+        address relayer,
+        bool approved
+    ) external;
+
     function balanceOf(address account) external view returns (uint256);
 
     /// @dev Returns the poolId for this pool

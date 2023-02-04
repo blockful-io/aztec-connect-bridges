@@ -183,20 +183,23 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         }    
     
         IVault.FundManagement memory fundManagement = IVault.FundManagement({
-            sender: address(this), 
+            sender: address(bridge), 
             fromInternalBalance: false,
-            recipient: payable(address(this)),
+            recipient: payable(address(bridge)),
             toInternalBalance: false
         });
 
 
         int256[] memory limits = new int256[](tokenAddresses.length);
-        for(uint i = 0; i < limits.length;) {
-            limits[i] = type(int256).max;
-            unchecked {
-                i++;
-            }
-        }
+        // for(uint i = 0; i < limits.length;) {
+        //     limits[i] = type(int256).max;
+        //     unchecked {
+        //         i++;
+        //     }
+        // }
+        limits[0] = 10e18;
+        limits[1] = 10e18;
+        limits[2] = -997889356;
 
         batchSwap = IVault.BatchSwap({
             kind: _kind,
@@ -246,7 +249,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *            in when feething getPoolTokens in the vault.
      *            This is because there is no joins in composable's but only a single swap of assets.
      */ 
-    function testBatchSwapWETHtoDAI(
+    function testBatchSwapBALtoWSTETH(
     ) public {
         // Set tokens to be swapped and amountsIn, also dealing the tokens to the bridge
         address[] memory tokensIn = new address[](2);
@@ -256,10 +259,10 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         tokensOut[0] = WETH;
         tokensOut[1] = WSTETH;
         address[] memory poolAddr = new address[](2);
-        poolAddr[1] = B80BAL20WETH;
-        poolAddr[0] = BSTETHSTABLE;
+        poolAddr[0] = B80BAL20WETH;
+        poolAddr[1] = BSTETHSTABLE;
 
-        uint256 amountsIn = 10e17;
+        uint256 amountsIn = 10e18;
         deal(tokensIn[0], address(bridge), amountsIn);
 
         IVault.Trade[] memory trades = makeTrades(tokensIn, tokensOut, poolAddr, amountsIn);
@@ -274,15 +277,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             trades
           );
 
-        // Pre-approve all tokens in the process
-        // TODO TESTAR AQUI DPS
-        address[] memory allTokens = new address[](tokenAddresses.length);
-        for(uint i = 0; i < allTokens.length; i++) {
-            allTokens[i] = address(tokenAddresses[i]);
-        }
-        address[] memory emptyList = new address[](0);
-        bridge.preApproveTokens(allTokens, allTokens);
-
         // Swap will call convert internally
         (
             uint256 outputValueA,
@@ -295,20 +289,19 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
         // Now we transfer the funds from the bridge to the rollup processor
+        
+        assertEq(
+            IERC20(tokensOut[1]).balanceOf(address(bridge)), 
+            outputValueA, 
+            "bridge must have balance must be greater than 0");
+
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
-        // assertEq(
-        //     IERC20(BAL).balanceOf(address(bridge)), 
-        //     0,
-        //     "Bridge BAL balance must be 0");
-        // assertEq(
-        //     IERC20(WETH).balanceOf(address(bridge)), 
-        //     0,
-        //     "Bridge WETH balance must be 0");
-        // assertEq(
-        //     IERC20(BAL).balanceOf(address(rollupProcessor)), 
-        //     outputValueA,
-        //     "Rollup WETH balance must match the output");
+        assertEq(
+            IERC20(tokensOut[1]).balanceOf(address(bridge)), 
+            outputValueA, 
+            "bridge must have balance must be greater than 0");
+
     }
 
     /** @notice - The purpose of this test is to directly test convert functionality of the bridge
