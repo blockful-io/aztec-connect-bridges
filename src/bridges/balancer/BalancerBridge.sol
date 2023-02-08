@@ -28,6 +28,9 @@ contract BalancerBridge is BridgeBase {
     mapping(uint64=>IVault.Swap) private commitsSwap;
     mapping(uint64=>IVault.BatchSwap) private commitsBatchSwap;
     mapping(uint64=>IVault.ActionKind) private actions;
+
+    // @dev Empty method which is present here in order to be able to receive ETH when unwrapping WETH.
+    receive() external payable {}
  
     /** @notice Set address of rollup processor
      *  @param _rollupProcessor Address of rollup processor
@@ -368,6 +371,8 @@ contract BalancerBridge is BridgeBase {
             outputValue[i] = tokens[i].balanceOf(_inputs.recipient);
             unchecked { i++; }
         }
+
+        // Approve the vault to spend the tokens
         IERC20( address(_inputs.request.assets[0]) ).approve(address(VAULT), type(uint256).max);
 
         VAULT.exitPool(
