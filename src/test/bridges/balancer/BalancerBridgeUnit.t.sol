@@ -395,15 +395,15 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             exitPool, 
             convert);
 
-        // assertEq(
-        //     IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
-        //     0,
-        //     "Should've consumed the entire amountIn, but it is only using 64 units"
-        // );
+        assertEq(
+            IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
+            0,
+            "Should've consumed the entire amountIn, but it is only using 64 units"
+        );
 
         // Output is always 0 ??
-        // assertGt(outputValueA, 0, "Output value A must be greater than 0");
-        assertEq(outputValueB, 0, "Output value B must be 0");
+        assertGt(outputValueA, 0, "Output value A must be greater than 0");
+        assertGt(outputValueB, 0, "Output value B must be greater than 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
@@ -427,8 +427,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         amountsIn[0] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
-        ( 
-            IVault.Join memory joinPool, 
+        (, 
             IVault.Exit memory exitPool, 
             IVault.Convert memory convert
         ) = encodeDataJoinOrExit(
@@ -440,12 +439,23 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         
         bridge.preApproveTokens(tokensIn, tokensOut);
 
-        ( uint256 outputValueA, uint256 outputValueB, bool isAsync ) = 
-        bridge.exitPool(exitPool, convert);
+        ( 
+            uint256 outputValueA, 
+            uint256 outputValueB, 
+            bool isAsync 
+        ) = bridge.exitPool(
+            exitPool, 
+            convert);
+
+        assertEq(
+            IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
+            0,
+            "Should've consumed the entire amountIn, but it is only using 64 units"
+        );
 
         // Output is always 0 ??
-        // assertGt(outputValueA, 0, "Output value A must be greater than 0");
-        assertEq(outputValueB, 0, "Output value B must be 0");
+        assertGt(outputValueA, 0, "Output value A must be greater than 0");
+        assertGt(outputValueB, 0, "Output value B must be greater than 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
