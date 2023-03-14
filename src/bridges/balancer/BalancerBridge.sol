@@ -23,22 +23,19 @@ contract BalancerBridge is BridgeBase {
     //        complex data than the rollup processor is used to. Without altering
     //        the core mechanics of the rollup, the only other option is to hardcode
     //        most of the commom vault action.
-    mapping(uint64=>IVault.Join) private commitsJoin;
-    mapping(uint64=>IVault.Exit) private commitsExit;
-    mapping(uint64=>IVault.Swap) private commitsSwap;
-    mapping(uint64=>IVault.BatchSwap) private commitsBatchSwap;
-    mapping(uint64=>IVault.ActionKind) private actions;
+    mapping(uint64 => IVault.Join) private commitsJoin;
+    mapping(uint64 => IVault.Exit) private commitsExit;
+    mapping(uint64 => IVault.Swap) private commitsSwap;
+    mapping(uint64 => IVault.BatchSwap) private commitsBatchSwap;
+    mapping(uint64 => IVault.ActionKind) private actions;
 
     // @dev Empty method which is present here in order to be able to receive ETH when unwrapping WETH.
     receive() external payable {}
- 
+
     /** @notice Set address of rollup processor
      *  @param _rollupProcessor Address of rollup processor
      */
-    constructor(
-        address _rollupProcessor
-    ) BridgeBase(_rollupProcessor) {
-    }
+    constructor(address _rollupProcessor) BridgeBase(_rollupProcessor) {}
 
     /** @notice - Sets all the important approvals
      *  @param _tokensIn - An array of address of input tokens (tokens to later swap in the convert(...) function)
@@ -46,30 +43,36 @@ contract BalancerBridge is BridgeBase {
      *  @dev - SwapBridge never holds any ERC20 tokens after or before an invocation of any of its functions. For this
      *         reason the following is not a security risk and makes convert(...) function more gas efficient.
      *         Notice that sometimes it is needed for the approval to come from within the convert(...) function.
-     *         It ignore ETH requests.      
+     *         It ignore ETH requests.
      */
-    function preApproveTokens(
-        address[] calldata _tokensIn, address[] calldata _tokensOut
-    ) external {
-        for (uint i = 0; i < _tokensIn.length;) {
-            if(address(0) == _tokensIn[i]) {
-                unchecked { ++i; }
+    function preApproveTokens(address[] calldata _tokensIn, address[] calldata _tokensOut) external {
+        for (uint i = 0; i < _tokensIn.length; ) {
+            if (address(0) == _tokensIn[i]) {
+                unchecked {
+                    ++i;
+                }
                 continue;
             }
             address tokenIn = _tokensIn[i];
             IERC20(tokenIn).approve(address(VAULT), 0);
             IERC20(tokenIn).approve(address(VAULT), type(uint256).max);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
-        for (uint i = 0; i < _tokensOut.length;) {
-            if(address(0) == _tokensOut[i]) {
-                unchecked { ++i; }
+        for (uint i = 0; i < _tokensOut.length; ) {
+            if (address(0) == _tokensOut[i]) {
+                unchecked {
+                    ++i;
+                }
                 continue;
             }
             address tokenOut = _tokensOut[i];
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), 0);
             IERC20(tokenOut).approve(address(ROLLUP_PROCESSOR), type(uint256).max);
-            unchecked { ++i; }
+            unchecked {
+                ++i;
+            }
         }
     }
 
@@ -77,11 +80,7 @@ contract BalancerBridge is BridgeBase {
      *  @param _joinPool - The struct containing the parameters for the vault action
      *  @return auxData - The hash in uint64
      */
-    function commitJoin(
-        IVault.Join memory _joinPool
-    ) internal returns (
-        uint64 auxData
-    ) { 
+    function commitJoin(IVault.Join memory _joinPool) internal returns (uint64 auxData) {
         auxData = uint64(uint256(keccak256(abi.encode(_joinPool))));
         commitsJoin[auxData] = _joinPool;
         actions[auxData] = IVault.ActionKind.JOIN;
@@ -91,11 +90,7 @@ contract BalancerBridge is BridgeBase {
      *  @param _exitPool - The struct containing the parameters for the vault action
      *  @return auxData - The hash in uint64
      */
-    function commitExit(
-        IVault.Exit memory _exitPool
-    ) internal returns (
-        uint64 auxData
-    ) { 
+    function commitExit(IVault.Exit memory _exitPool) internal returns (uint64 auxData) {
         auxData = uint64(uint256(keccak256(abi.encode(_exitPool))));
         commitsExit[auxData] = _exitPool;
         actions[auxData] = IVault.ActionKind.EXIT;
@@ -105,11 +100,7 @@ contract BalancerBridge is BridgeBase {
      * @param _swap - The struct containing the parameters for the vault action
      * @return auxData - The hash in uint64
      */
-    function commitSwap(
-        IVault.Swap calldata _swap
-    ) internal returns (
-        uint64 auxData
-    ) { 
+    function commitSwap(IVault.Swap calldata _swap) internal returns (uint64 auxData) {
         auxData = uint64(uint256(keccak256(abi.encode(_swap))));
         commitsSwap[auxData] = _swap;
         actions[auxData] = IVault.ActionKind.SWAP;
@@ -119,11 +110,7 @@ contract BalancerBridge is BridgeBase {
      * @param _batchSwap - The struct containing the parameters for the vault action
      * @return auxData - The hash in uint64
      */
-    function commitBatchSwap(
-        IVault.BatchSwap calldata _batchSwap
-    ) internal returns (
-        uint64 auxData
-    ) { 
+    function commitBatchSwap(IVault.BatchSwap calldata _batchSwap) internal returns (uint64 auxData) {
         auxData = uint64(uint256(keccak256(abi.encode(_batchSwap))));
         commitsBatchSwap[auxData] = _batchSwap;
         actions[auxData] = IVault.ActionKind.BATCHSWAP;
@@ -139,13 +126,8 @@ contract BalancerBridge is BridgeBase {
     function joinPool(
         IVault.Join memory _joinPool,
         IVault.Convert calldata _convert
-    ) public payable returns (
-        uint256 outputValueA, 
-        uint256 outputValueB, 
-        bool async
-    ) {
-        ( outputValueA, outputValueB, async ) = 
-        convert(
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+        (outputValueA, outputValueB, async) = convert(
             _convert.inputAssetA,
             _convert.inputAssetB,
             _convert.outputAssetA,
@@ -162,18 +144,13 @@ contract BalancerBridge is BridgeBase {
      * @param _convert - The struct containing the parameters for the convert(...) function
      * @return outputValueA - The amount of output token A
      * @return outputValueB - The amount of output token B
-     * @return async - True if the vault action is async 
+     * @return async - True if the vault action is async
      */
     function exitPool(
         IVault.Exit memory _exitPool,
         IVault.Convert calldata _convert
-    ) public payable returns (
-        uint256 outputValueA, 
-        uint256 outputValueB, 
-        bool async
-    ) {
-        ( outputValueA, outputValueB, async ) = 
-        convert(
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+        (outputValueA, outputValueB, async) = convert(
             _convert.inputAssetA,
             _convert.inputAssetB,
             _convert.outputAssetA,
@@ -190,18 +167,13 @@ contract BalancerBridge is BridgeBase {
      *  @param _convert - The struct containing the parameters for the convert(...) function
      *  @return outputValueA - The amount of output token A
      *  @return outputValueB - The amount of output token B
-     *  @return async - True if the vault action is async 
+     *  @return async - True if the vault action is async
      */
     function swap(
         IVault.Swap calldata _swap,
         IVault.Convert calldata _convert
-    ) public payable returns (
-        uint256 outputValueA, 
-        uint256 outputValueB, 
-        bool async
-    ) {
-       ( outputValueA, outputValueB, async ) = 
-        convert(
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+        (outputValueA, outputValueB, async) = convert(
             _convert.inputAssetA,
             _convert.inputAssetB,
             _convert.outputAssetA,
@@ -218,21 +190,13 @@ contract BalancerBridge is BridgeBase {
      *  @param _convert - The struct containing the parameters for the convert(...) function
      *  @return outputValueA - The amount of output token A
      *  @return outputValueB - The amount of output token B
-     *  @return async - True if the vault action is async 
+     *  @return async - True if the vault action is async
      */
     function batchSwap(
         IVault.BatchSwap calldata _batchSwap,
         IVault.Convert calldata _convert
-    ) public payable returns (
-        uint256 outputValueA,
-        uint256 outputValueB,
-        bool async
-    ) {
-        ( 
-            outputValueA,
-            outputValueB,
-            async
-        ) = convert(
+    ) public payable returns (uint256 outputValueA, uint256 outputValueB, bool async) {
+        (outputValueA, outputValueB, async) = convert(
             _convert.inputAssetA,
             _convert.inputAssetB,
             _convert.outputAssetA,
@@ -264,90 +228,69 @@ contract BalancerBridge is BridgeBase {
         uint256,
         uint64 _auxData,
         address _rollupBeneficiary
-    ) public payable override (BridgeBase) onlyRollup returns (
-        uint256 outputValueA, 
-        uint256 outputValueB, 
-        bool
-    ) {   
-        if( actions[_auxData] == IVault.ActionKind.JOIN ) {
-
-            paySubsidyJoinOrExit(
-                commitsJoin[_auxData].poolId, 
-                IVault.ActionKind.JOIN, 
-                _rollupBeneficiary);
+    ) public payable override(BridgeBase) onlyRollup returns (uint256 outputValueA, uint256 outputValueB, bool) {
+        if (actions[_auxData] == IVault.ActionKind.JOIN) {
+            paySubsidyJoinOrExit(commitsJoin[_auxData].poolId, IVault.ActionKind.JOIN, _rollupBeneficiary);
 
             outputValueA = joinPool(commitsJoin[_auxData]);
-            delete(commitsJoin[_auxData]);
+            delete (commitsJoin[_auxData]);
+        } else if (actions[_auxData] == IVault.ActionKind.EXIT) {
+            paySubsidyJoinOrExit(commitsExit[_auxData].poolId, IVault.ActionKind.EXIT, _rollupBeneficiary);
 
-        } else if( actions[_auxData] == IVault.ActionKind.EXIT ) {
-
-            paySubsidyJoinOrExit(
-                commitsExit[_auxData].poolId, 
-                IVault.ActionKind.EXIT, 
-                _rollupBeneficiary);            
-
-            uint256[] memory outputValue = exitPool(commitsExit[_auxData]); 
-            delete(commitsExit[_auxData]);
+            uint256[] memory outputValue = exitPool(commitsExit[_auxData]);
+            delete (commitsExit[_auxData]);
 
             // Temporarily solution for the bridge size limitation
             outputValueA = outputValue[0];
             outputValueB = outputValue[1];
-
-        } else if( actions[_auxData] == IVault.ActionKind.SWAP ) {
-
+        } else if (actions[_auxData] == IVault.ActionKind.SWAP) {
             paySubsidySwap(
                 address(commitsSwap[_auxData].singleSwap.assetIn),
                 address(commitsSwap[_auxData].singleSwap.assetOut),
-                _rollupBeneficiary);
+                _rollupBeneficiary
+            );
 
             outputValueA = singleSwap(commitsSwap[_auxData]);
-            delete(commitsBatchSwap[_auxData]);
+            delete (commitsBatchSwap[_auxData]);
+        } else if (actions[_auxData] == IVault.ActionKind.BATCHSWAP) {
+            paySubsidyBatchSwap(commitsBatchSwap[_auxData].assets, _rollupBeneficiary);
 
-        } else if( actions[_auxData] == IVault.ActionKind.BATCHSWAP ) {
-
-            paySubsidyBatchSwap(
-                commitsBatchSwap[_auxData].assets,
-                _rollupBeneficiary);
-
-            outputValueA = batchSwap(commitsBatchSwap[_auxData]);            
-            delete(commitsBatchSwap[_auxData]); 
-
+            outputValueA = batchSwap(commitsBatchSwap[_auxData]);
+            delete (commitsBatchSwap[_auxData]);
         } else {
             revert ErrorLib.InvalidAuxData();
         }
-        delete(actions[_auxData]);
+        delete (actions[_auxData]);
     }
 
     /** @notice - Calls joinPool on Balancer Vault
      *  @param _inputs - The inputs struct
      *  @return outputValue - the amount of output asset to return
      */
-    function joinPool(
-        IVault.Join memory _inputs
-    ) internal returns (
-        uint256 outputValue
-    ) {
+    function joinPool(IVault.Join memory _inputs) internal returns (uint256 outputValue) {
         // Get the address of the pool
         (address poolAddr, ) = VAULT.getPool(_inputs.poolId);
-        
+
         // Then the balance, before and after the vault action
         outputValue = IERC20(poolAddr).balanceOf(_inputs.recipient);
 
         // @dev - Was checking if the input is eth, but I don't
         //        think Balancer supports ETH as an input
         bool isEth = false;
-        for(uint i = 0; i < _inputs.request.assets.length;) {
-            if(_inputs.request.assets[i] == IAsset(address(0))) {
+        for (uint i = 0; i < _inputs.request.assets.length; ) {
+            if (_inputs.request.assets[i] == IAsset(address(0))) {
                 isEth = true;
             }
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
         VAULT.joinPool{value: isEth ? msg.value : 0}(
-          _inputs.poolId,
-          _inputs.sender,
-          _inputs.recipient,
-          _inputs.request
+            _inputs.poolId,
+            _inputs.sender,
+            _inputs.recipient,
+            _inputs.request
         );
 
         outputValue = IERC20(poolAddr).balanceOf(_inputs.recipient) - outputValue;
@@ -357,34 +300,26 @@ contract BalancerBridge is BridgeBase {
      *  @param _inputs - The inputs struct
      *  @return outputValue - the amount of output asset to return
      */
-    function exitPool(
-        IVault.Exit memory _inputs
-    ) internal returns (
-        uint256[] memory outputValue
-    ) {
+    function exitPool(IVault.Exit memory _inputs) internal returns (uint256[] memory outputValue) {
         // Load the tokens from the pool, given its poolID
         (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(_inputs.poolId);
 
         // then set their balance, before and after the vault action
         outputValue = new uint256[](tokens.length);
-        for(uint i = 0; i < tokens.length;) {
+        for (uint i = 0; i < tokens.length; ) {
             outputValue[i] = tokens[i].balanceOf(_inputs.recipient);
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
-        // Approve the vault to spend the tokens
-        IERC20( address(_inputs.request.assets[0]) ).approve(address(VAULT), type(uint256).max);
+        VAULT.exitPool(_inputs.poolId, _inputs.sender, payable(_inputs.recipient), _inputs.request);
 
-        VAULT.exitPool(
-            _inputs.poolId,
-            _inputs.sender,
-            payable(_inputs.recipient),
-            _inputs.request
-        );
-
-        for(uint i = 0; i < tokens.length; ) {
+        for (uint i = 0; i < tokens.length; ) {
             outputValue[i] = tokens[i].balanceOf(_inputs.recipient) - outputValue[i];
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
     }
 
@@ -392,45 +327,23 @@ contract BalancerBridge is BridgeBase {
      *  @param _swap - The swap struct
      *  @return outputValueA - the amount of output asset
      */
-    function singleSwap(
-        IVault.Swap memory _swap
-    ) internal returns (
-        uint256 outputValueA
-    ) {
-        outputValueA = VAULT.swap(
-            _swap.singleSwap,
-            _swap.funds,
-            _swap.limit,
-            _swap.deadline
-        );
+    function singleSwap(IVault.Swap memory _swap) internal returns (uint256 outputValueA) {
+        outputValueA = VAULT.swap(_swap.singleSwap, _swap.funds, _swap.limit, _swap.deadline);
     }
 
     /** @notice - Calls batchSwap on Balancer Vault
      *  @param _swap - The struct containing the parameters for the vault action
-     *  @return outputValueA - the amount of output assets returned 
+     *  @return outputValueA - the amount of output assets returned
      */
-    function batchSwap(
-        IVault.BatchSwap memory _swap
-    ) internal returns (
-        uint256 outputValueA
-    ) {   
+    function batchSwap(IVault.BatchSwap memory _swap) internal returns (uint256 outputValueA) {
         // @dev - int256 uses delta to return values, but Aztec only return uint256.
         //        Measuring the balance is a turn around
-        uint256 balanceBefore = 
-        IERC20(address(_swap.assets[_swap.assets.length-1])).balanceOf(address(this));
+        uint256 balanceBefore = IERC20(address(_swap.assets[_swap.assets.length - 1])).balanceOf(address(this));
 
-        VAULT.batchSwap(
-            _swap.kind,
-            _swap.swaps,
-            _swap.assets,
-            _swap.funds,
-            _swap.limits,
-            _swap.deadline
-        );
+        VAULT.batchSwap(_swap.kind, _swap.swaps, _swap.assets, _swap.funds, _swap.limits, _swap.deadline);
 
-        uint256 balanceAfter = 
-        IERC20(address(_swap.assets[_swap.assets.length-1])).balanceOf(address(this));
-    
+        uint256 balanceAfter = IERC20(address(_swap.assets[_swap.assets.length - 1])).balanceOf(address(this));
+
         outputValueA = balanceAfter - balanceBefore;
     }
 
@@ -444,11 +357,7 @@ contract BalancerBridge is BridgeBase {
      *         Since the tokensOut is not present in the original join/exit structs,
      *         we must get the the tokens directly from the poolId.
      */
-    function paySubsidyJoinOrExit(
-        bytes32 poolId, 
-        IVault.ActionKind kind,
-        address _rollupBeneficiary 
-    ) public {
+    function paySubsidyJoinOrExit(bytes32 poolId, IVault.ActionKind kind, address _rollupBeneficiary) public {
         // Load the tokens from the pool given its poolID
         (IERC20[] memory tokens, , ) = VAULT.getPoolTokens(poolId);
 
@@ -456,29 +365,25 @@ contract BalancerBridge is BridgeBase {
         address[] memory poolTokens = new address[](tokens.length);
 
         // Change from IERC20 to address and add to the array
-        for(uint i = 0; i < tokens.length;) {
+        for (uint i = 0; i < tokens.length; ) {
             poolTokens[i] = address(tokens[i]);
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
-        // The pool issue an ERC20 which is the output of 
+        // The pool issue an ERC20 which is the output of
         // a join and also the input of an exit
         address[] memory contractToken = new address[](1);
-        ( contractToken[0], ) = VAULT.getPool(poolId);
+        (contractToken[0], ) = VAULT.getPool(poolId);
 
         // Reverts the result based on Join or Exit
-        if(kind == IVault. ActionKind.JOIN) {
+        if (kind == IVault.ActionKind.JOIN) {
             // In the Join action, the contract token is the output
-            SUBSIDY.claimSubsidy(
-                _computeManyCriteria(poolTokens, contractToken),
-                _rollupBeneficiary
-            );
+            SUBSIDY.claimSubsidy(_computeManyCriteria(poolTokens, contractToken), _rollupBeneficiary);
         } else {
             // In the Exit action, the contract token is the input
-            SUBSIDY.claimSubsidy(
-                _computeManyCriteria(contractToken, poolTokens),
-                _rollupBeneficiary
-            );    
+            SUBSIDY.claimSubsidy(_computeManyCriteria(contractToken, poolTokens), _rollupBeneficiary);
         }
     }
 
@@ -487,15 +392,8 @@ contract BalancerBridge is BridgeBase {
      *  @param _tokensOut - The tokenOut that will be received
      *  @param _rollupBeneficiary - The address of the rollup beneficiary
      */
-    function paySubsidySwap(
-        address _tokensIn,
-        address _tokensOut,
-        address _rollupBeneficiary
-    ) public {
-        SUBSIDY.claimSubsidy(
-            _computeCriteria(_tokensIn, _tokensOut),
-            _rollupBeneficiary
-        );
+    function paySubsidySwap(address _tokensIn, address _tokensOut, address _rollupBeneficiary) public {
+        SUBSIDY.claimSubsidy(_computeCriteria(_tokensIn, _tokensOut), _rollupBeneficiary);
     }
 
     /** @notice - Calculate and claim subsidy for a batchSwap
@@ -504,23 +402,17 @@ contract BalancerBridge is BridgeBase {
      *  @dev - We are assuming the first token is the input and the last is the output
      *         It must be better elaborated in the future to handle more rich swaps
      */
-    function paySubsidyBatchSwap(
-        IAsset[] memory _assets,
-        address _rollupBeneficiary
-    ) public {
+    function paySubsidyBatchSwap(IAsset[] memory _assets, address _rollupBeneficiary) public {
         SUBSIDY.claimSubsidy(
-            _computeCriteria(
-                address(_assets[0]), 
-                address(_assets[_assets.length-1])),
+            _computeCriteria(address(_assets[0]), address(_assets[_assets.length - 1])),
             _rollupBeneficiary
         );
     }
+
     /** @notice - Registers subsidy criteria for a given token pair
      *  @param _criteria - The criteria to register
      */
-    function registerSubsidyCriteria(
-        uint256 _criteria
-    ) external {
+    function registerSubsidyCriteria(uint256 _criteria) external {
         SUBSIDY.setGasUsageAndMinGasPerMinute({
             _criteria: _criteria,
             _gasUsage: uint32(300000), // 300k gas (Note: this is a gas usage when only 1 split path is used)
@@ -534,21 +426,23 @@ contract BalancerBridge is BridgeBase {
      *  @return - The encoded uint256
      */
     function _computeManyCriteria(
-        address[] memory _inputTokens, 
+        address[] memory _inputTokens,
         address[] memory _outputTokens
-    ) public pure returns (
-        uint256
-    ) {
+    ) public pure returns (uint256) {
         bytes memory encoded;
 
-        for(uint i = 0; i < _inputTokens.length;) {
+        for (uint i = 0; i < _inputTokens.length; ) {
             encoded = abi.encodePacked(encoded, _inputTokens[i]);
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
-        for(uint i = 0; i < _outputTokens.length;) {
+        for (uint i = 0; i < _outputTokens.length; ) {
             encoded = abi.encodePacked(encoded, _outputTokens[i]);
-            unchecked { i++; }
+            unchecked {
+                i++;
+            }
         }
 
         return uint256(keccak256(encoded));
@@ -559,12 +453,7 @@ contract BalancerBridge is BridgeBase {
      *  @param _outputTokens The output asset
      *  @return The criteria
      */
-    function _computeCriteria(
-        address _inputTokens, 
-        address _outputTokens
-    ) public pure returns (
-        uint256
-    ) {
+    function _computeCriteria(address _inputTokens, address _outputTokens) public pure returns (uint256) {
         return uint256(keccak256(abi.encodePacked(_inputTokens, _outputTokens)));
     }
 
@@ -572,11 +461,7 @@ contract BalancerBridge is BridgeBase {
      *  @param _tokens - an array of IERC20 tokens
      *  @return _assets - an array of IAssets
      */
-    function _asIAsset(
-        IERC20[] memory _tokens
-    ) public pure returns (
-         IAsset[] memory _assets
-    ) {
+    function _asIAsset(IERC20[] memory _tokens) public pure returns (IAsset[] memory _assets) {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             _assets := _tokens
@@ -587,11 +472,7 @@ contract BalancerBridge is BridgeBase {
      *  @param _assets - an array of IAssets
      *  @return _tokens - an array of IERC20 tokens
      */
-    function _asIERC20(
-        IAsset[] memory _assets
-    ) public pure returns (
-        IERC20[] memory _tokens
-    ) {
+    function _asIERC20(IAsset[] memory _assets) public pure returns (IERC20[] memory _tokens) {
         // solhint-disable-next-line no-inline-assembly
         assembly {
             _tokens := _assets

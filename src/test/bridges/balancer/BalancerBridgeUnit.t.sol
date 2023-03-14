@@ -3,12 +3,12 @@
 pragma solidity >=0.8.4;
 
 import {AztecTypes} from "rollup-encoder/libraries/AztecTypes.sol";
-import {BalancerBridge} from "../../../bridges/balancer/BalancerBridge.sol";
 import {BridgeTestBase} from "./../../aztec/base/BridgeTestBase.sol";
 import {IRollupProcessor} from "rollup-encoder/interfaces/IRollupProcessor.sol";
 import {ErrorLib} from "../../../bridges/base/ErrorLib.sol";
 
 // balancer-specific imports
+import {BalancerBridge} from "../../../bridges/balancer/BalancerBridge.sol";
 import {IBalancerQueries} from "../../../interfaces/balancer/IBalancerQueries.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IVault, IAsset} from "../../../interfaces/balancer/IVault.sol";
@@ -54,7 +54,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         vm.deal(address(bridge), 0);
         vm.deal(BENEFICIARY, 0);
 
-        // Use the label cheat code to mark the address with "balancer Bridge" in the traces
+        // Use the label cheat code to mark the addresses when using verbosity
         vm.label(address(bridge), "Balancer Bridge");
         vm.label(address(VAULT), "Balancer Vault");
         vm.label(address(FEE_COLLECTOR), "Fee Collector");
@@ -74,16 +74,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *            when swapping WETH to DAI.
      */
     function testSwapWETHtoDAI() public {
+        // Token address being inputed and its outcome from the pool
         address[] memory tokensIn = new address[](1);
         tokensIn[0] = WETH;
         address[] memory tokensOut = new address[](1);
         tokensOut[0] = BAL;
 
+        // The amount being sent to the bridge
         uint256 amountIn = 1e18;
         deal(WETH, address(bridge), amountIn);
 
+        // Fetching poolId to generate the swap
         bytes32 poolId = IVault(B80BAL20WETH).getPoolId();
 
+        // Encode the swap for further use
         (IVault.Swap memory swap, IVault.Convert memory convert) = encodeSwap(
             poolId,
             IVault.SwapKind.GIVEN_IN,
@@ -92,8 +96,13 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             amountIn
         );
 
+        IVault.Swap memory fakeSwap = swap;
+        assertEq(abi.encode(fakeSwap), abi.encode(swap), "do the thing");
+
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Swap tokens and get the outputs
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.swap(swap, convert);
 
         assertGt(outputValueA, 0, "OutputValueA must be greater than 0");
@@ -104,11 +113,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         assertEq(IERC20(BAL).balanceOf(address(bridge)), 0, "Bridge BAL balance must be 0");
         assertEq(IERC20(WETH).balanceOf(address(bridge)), 0, "Bridge WETH balance must be 0");
-        assertEq(
-            IERC20(BAL).balanceOf(address(rollupProcessor)),
-            outputValueA,
-            "Rollup WETH balance must match the output"
-        );
+        assertEq(IERC20(BAL).balanceOf(address(rollupProcessor)), outputValueA, "Rollup balance must match the output");
     }
 
     /**
@@ -116,6 +121,8 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *            when batchSwapping BAL to WSTETH. Running through 2 hops.
      */
     function testBatchSwapBALtoWSTETH() public {
+        // Tokens address being inputed and its trade path
+        // Trade: BAL -> WETH -> WSTETH
         address[] memory tokensIn = new address[](2);
         tokensIn[0] = BAL;
         tokensIn[1] = WETH;
@@ -126,37 +133,33 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         poolAddr[0] = B80BAL20WETH;
         poolAddr[1] = BSTETHSTABLE;
 
+        // The amount being sent to the bridge
         uint256 amountsIn = 10e18;
         deal(tokensIn[0], address(bridge), amountsIn);
 
+        // Encode the trade path and amounts
         IVault.Trade[] memory trades = makeTrades(tokensIn, tokensOut, poolAddr, amountsIn);
 
+        // Encode the batch swap for further use
         (IVault.BatchSwap memory batchSwap, IVault.Convert memory convert) = encodeBatchSwap(
             IVault.SwapKind.GIVEN_IN,
             trades
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // BatchSwap tokens and get the outputs
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.batchSwap(batchSwap, convert);
 
         assertGt(outputValueA, 0, "OutputValueA must be greater than 0");
         assertEq(outputValueB, 0, "OutputValueB must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
-        assertEq(
-            IERC20(tokensOut[1]).balanceOf(address(bridge)),
-            outputValueA,
-            "Bridge must have a balance greater than 0"
-        );
-
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
-        assertEq(
-            IERC20(tokensOut[1]).balanceOf(rollupProcessor),
-            outputValueA,
-            "Rollup should should receive the output from the bridge"
-        );
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge must have a balance greater than 0");
+        assertEq(IERC20(tokensOut[1]).balanceOf(rollupProcessor), outputValueA, "Rollup balance must match the output");
     }
 
     /**
@@ -164,6 +167,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *           when joinning Balancer stETH Stable Pool.
      */
     function testJoinPoolBSTETHSTABLE() public {
+        // Tokens addresses to form the pair and the output LP
         // @dev - TokensIn must be in the same order as the returned value from getPoolTokens
         address[] memory tokensIn = new address[](2);
         tokensIn[0] = WSTETH;
@@ -171,11 +175,13 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         address[] memory tokensOut = new address[](1);
         tokensOut[0] = BSTETHSTABLE;
 
+        // The amount being sent to the bridge
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 1e18;
         amountsIn[1] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
+        // Encode the join for further use
         (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
@@ -183,27 +189,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Join pool and get the outputs
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.joinPool(joinPool, convert);
 
         assertGt(outputValueA, 0, "Output value A must be greater than 0");
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(address(bridge)),
-            outputValueA,
-            "Bridge must have a balance greater than 0"
-        );
-
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(rollupProcessor),
-            outputValueA,
-            "Rollup should should receive the output from the bridge"
-        );
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge balance must be equal 0");
+        assertEq(IERC20(tokensOut[0]).balanceOf(rollupProcessor), outputValueA, "Rollup balance must match the output");
     }
 
     /**
@@ -211,18 +210,21 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *           when joinning Balancer 80 BAL 20 WETH.
      */
     function testJoinPool80BAL20WETH() public {
-        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
+        // Tokens addresses to form the pair and the output LP
+        // @dev - TokensIn must be in the same order as the returned value from getPoolTokens
         address[] memory tokensIn = new address[](2);
         tokensIn[0] = BAL;
         tokensIn[1] = WETH;
         address[] memory tokensOut = new address[](1);
         tokensOut[0] = B80BAL20WETH;
 
+        // The amount being sent to the bridge
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 80e17;
         amountsIn[1] = 20e17;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
+        // Encode the join for further use
         (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
@@ -230,27 +232,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Join pool and get the outputs
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.joinPool(joinPool, convert);
 
         assertGt(outputValueA, 0, "Output value A must be greater than 0");
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(address(bridge)),
-            outputValueA,
-            "Bridge must have a balance greater than 0"
-        );
-
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(rollupProcessor),
-            outputValueA,
-            "Rollup should should receive the output from the bridge"
-        );
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge balance must be equal 0");
+        assertEq(IERC20(tokensOut[0]).balanceOf(rollupProcessor), outputValueA, "Rollup balance must match the output");
     }
 
     /**
@@ -258,17 +253,21 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *         when joining Balancer rETH Stable Pool.
      */
     function testJoinPoolBRETHSTABLE() public {
+        // Tokens addresses to form the pair and the output LP
+        // @dev - TokensIn must be in the same order as the returned value from getPoolTokens
         address[] memory tokensIn = new address[](2);
         tokensIn[0] = RETH;
         tokensIn[1] = WETH;
         address[] memory tokensOut = new address[](1);
         tokensOut[0] = BRETHSTABLE;
 
+        // The amount being sent to the bridge
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 1e18;
         amountsIn[1] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
+        // Encode the join for further use
         (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
@@ -276,22 +275,19 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Join pool and get the outputs
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.joinPool(joinPool, convert);
 
         assertGt(outputValueA, 0, "Output value A must be greater than 0");
         assertEq(outputValueB, 0, "Output value B must be 0");
         assertTrue(!isAsync, "Bridge is incorrectly in an async mode");
 
-        assertEq(
-            IERC20(tokensOut[0]).balanceOf(address(bridge)),
-            outputValueA,
-            "Bridge must have a balance greater than 0"
-        );
-
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
 
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge balance must be equal 0");
         assertEq(
             IERC20(tokensOut[0]).balanceOf(rollupProcessor),
             outputValueA,
@@ -309,23 +305,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *            cannot differs from 0, otherise onExitPool will throw error.
      */
     function testExitPoolBSTETHSTABLE() public {
-        // Must be in the same order when returned from the Balancer Vault function getPoolTokens()
+        // LP token address to exit the pool with output tokens
+        // @dev - TokensIn must be in the same order as the returned value from getPoolTokens
         address[] memory tokensIn = new address[](1);
         tokensIn[0] = BSTETHSTABLE;
         address[] memory tokensOut = new address[](2);
         tokensOut[0] = WSTETH;
         tokensOut[1] = WETH;
 
+        // The amount being sent to the bridge
         uint256[] memory amountsIn = new uint256[](1);
         amountsIn[0] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
-        assertEq(
-            IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
-            amountsIn[0],
-            "Initial balance must match deal amount"
-        );
-
+        // Encode the exit for further use
         (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeDataJoinOrExit(
             IVault.ActionKind.EXIT,
             tokensIn,
@@ -333,15 +326,11 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Exit pool and get the output tokens
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.exitPool(exitPool, convert);
-
-        assertEq(
-            IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
-            0,
-            "Should've consumed the entire amountIn, but it is only using 64 units"
-        );
 
         // Output is always 0 ??
         assertGt(outputValueA, 0, "Output value A must be greater than 0");
@@ -350,6 +339,10 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueB);
+
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge balance must be equal 0");
+        assertEq(IERC20(tokensOut[0]).balanceOf(rollupProcessor), outputValueA, "Rollup balance must match the output");
+        assertEq(IERC20(tokensOut[1]).balanceOf(rollupProcessor), outputValueB, "Rollup balance must match the output");
     }
 
     /**
@@ -357,17 +350,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      *         when exiting Balancer 80 BAL 20 WETH.
      */
     function testExitPool80BAL20WETH() public {
-        // Must be in the same order when returned from the Balancer Vault function: getPoolTokens()
+        // LP token address to exit the pool with output tokens
+        // @dev - TokensIn must be in the same order as the returned value from getPoolTokens
         address[] memory tokensIn = new address[](1);
         tokensIn[0] = B80BAL20WETH;
         address[] memory tokensOut = new address[](2);
         tokensOut[0] = BAL;
         tokensOut[1] = WETH;
 
+        // The amount being sent to the bridge
         uint256[] memory amountsIn = new uint256[](tokensIn.length);
         amountsIn[0] = 1e18;
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
+        // Encode the exit for further use
         (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeDataJoinOrExit(
             IVault.ActionKind.EXIT,
             tokensIn,
@@ -375,15 +371,11 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut
         );
 
+        // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
 
+        // Exit pool and get the output tokens
         (uint256 outputValueA, uint256 outputValueB, bool isAsync) = bridge.exitPool(exitPool, convert);
-
-        assertEq(
-            IERC20(BSTETHSTABLE).balanceOf(address(bridge)),
-            0,
-            "Should've consumed the entire amountIn, but it is only using 64 units"
-        );
 
         // Output is always 0 ??
         assertGt(outputValueA, 0, "Output value A must be greater than 0");
@@ -392,6 +384,10 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
 
         IERC20(tokensOut[0]).transferFrom(address(bridge), rollupProcessor, outputValueA);
         IERC20(tokensOut[1]).transferFrom(address(bridge), rollupProcessor, outputValueB);
+
+        assertEq(IERC20(tokensIn[0]).balanceOf(address(bridge)), 0, "Bridge balance must be equal 0");
+        assertEq(IERC20(tokensOut[0]).balanceOf(rollupProcessor), outputValueA, "Rollup balance must match the output");
+        assertEq(IERC20(tokensOut[1]).balanceOf(rollupProcessor), outputValueB, "Rollup balance must match the output");
     }
 
     /**
@@ -413,16 +409,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         require(_actionType == IVault.ActionKind.JOIN || _actionType == IVault.ActionKind.EXIT, "Invalid action type"); // Sanity check
 
         // We must wrap the convert request in a struct to avoid deepstack
-        // This could be hardcoded, but we are doing it dynamically to avoid
-        convert = IVault.Convert({
-            inputAssetA: emptyAsset,
-            inputAssetB: emptyAsset,
-            outputAssetA: emptyAsset,
-            outputAssetB: emptyAsset,
-            totalInputValue: 0,
-            interactionNonce: 0,
-            rollupBeneficiary: BENEFICIARY
-        });
+        convert = prepareConvert();
 
         // Convert IERC20 to IAsset
         IERC20[] memory tokens = asIERC20(_actionType == IVault.ActionKind.JOIN ? _tokensIn : _tokensOut);
@@ -466,7 +453,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
                 minAmountsOut[i] = 0;
             }
 
-            // Build ExitPool request
             IVault.ExitPoolRequest memory request = IVault.ExitPoolRequest({
                 assets: assets,
                 minAmountsOut: minAmountsOut,
@@ -503,15 +489,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         uint256 _totalInputValue
     ) public view returns (IVault.Swap memory swap, IVault.Convert memory convert) {
         // We must wrap the convert request in a struct to avoid deepstack
-        convert = IVault.Convert({
-            inputAssetA: emptyAsset,
-            inputAssetB: emptyAsset,
-            outputAssetA: emptyAsset,
-            outputAssetB: emptyAsset,
-            totalInputValue: 0,
-            interactionNonce: 0,
-            rollupBeneficiary: BENEFICIARY
-        });
+        convert = prepareConvert();
 
         IVault.SingleSwap memory singleSwap = IVault.SingleSwap({
             poolId: _poolId,
@@ -544,20 +522,12 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         IVault.Trade[] memory _trades
     ) public view returns (IVault.BatchSwap memory batchSwap, IVault.Convert memory convert) {
         // We must wrap the convert request in a struct to avoid deepstack
-        convert = IVault.Convert({
-            inputAssetA: emptyAsset,
-            inputAssetB: emptyAsset,
-            outputAssetA: emptyAsset,
-            outputAssetB: emptyAsset,
-            totalInputValue: 0,
-            interactionNonce: 0,
-            rollupBeneficiary: BENEFICIARY
-        });
+        convert = prepareConvert();
 
         IERC20[] memory tokenAddresses = new IERC20[](_trades.length + 1);
-        // There will be at least 1 token more than trades. We assume that the first token
+        // There will be at least 1 more token than trades. We assume that the first token
         // is the one that will be used to join the pool and the others will fill as the
-        // subsequent outputs. Trades starts at index [0,1] and runs until [n-1,n]
+        // subsequent outputs. Trades starts at indexes [0] and [1], last two trades are [n-1],[n]
         for (uint256 i = 1; i < _trades.length + 1; i++) {
             if (i == 1) {
                 tokenAddresses[i - 1] = IERC20(_trades[i - 1].tokenIn);
@@ -657,18 +627,20 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
     }
 
     /**
-     * @dev - Query the Vault for the amountsOut of an exit
-     *         Currently not working, check encodeJoinOrExit
-     * @param _target - The target contract
-     * @param _encodeWithSig - The encoded function call
-     * @return amountsOut - The amountsOut of the exit
+     * @dev - Will generate an empty convert struct to call convert function.
+     *        The data field is not setled yet.
+     *        Most of the nonutilized variables can be hardcoded.
+     * @return convert - The empty convert struct
      */
-    function staticQueryExit(
-        address _target,
-        bytes memory _encodeWithSig
-    ) public view returns (uint256[] memory amountsOut) {
-        (, bytes memory data) = _target.staticcall(_encodeWithSig);
-        (, amountsOut) = abi.decode(data, (uint256, uint256[]));
-        return amountsOut;
+    function prepareConvert() public view returns (IVault.Convert memory convert) {
+        convert = IVault.Convert({
+            inputAssetA: emptyAsset,
+            inputAssetB: emptyAsset,
+            outputAssetA: emptyAsset,
+            outputAssetB: emptyAsset,
+            totalInputValue: 0,
+            interactionNonce: 0,
+            rollupBeneficiary: BENEFICIARY
+        });
     }
 }
