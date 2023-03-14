@@ -16,6 +16,8 @@ import {IVault, IAsset} from "../../../interfaces/balancer/IVault.sol";
 import "forge-std/Test.sol";
 
 // @notice The purpose of this test is to directly test the convert functionality of the bridge.
+// @dev Run this bridge by running: (use -vvvvv for maximum verbosity)
+// forge test --match-contract BalancerBridge -f https://mainnet.infura.io/v3/9928b52099854248b3a096be07a6b23c --fork-block-number 16400000 -vvvvv
 contract BalancerBridgeUnitTest is BridgeTestBase {
     // Bridge and Rollup
     address private constant BENEFICIARY = address(11);
@@ -95,9 +97,6 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
             tokensOut[0],
             amountIn
         );
-
-        IVault.Swap memory fakeSwap = swap;
-        assertEq(abi.encode(fakeSwap), abi.encode(swap), "do the thing");
 
         // Pre-aprove tokens
         bridge.preApproveTokens(tokensIn, tokensOut);
