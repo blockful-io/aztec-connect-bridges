@@ -14,6 +14,8 @@ import {IVault, IAsset} from "../../interfaces/balancer/IVault.sol";
  * @title - Balancer Bridge Contract.
  * @author - Blockful (@Blockful_io on twitter)
  * @dev - This bridge demonstrates the flow of Balancer Vault activities in the convert(...) function.
+ * Run this bridge by running: (use -vvvvv for maximum verbosity)
+ * forge test --match-contract BalancerBridge -f https://mainnet.infura.io/v3/9928b52099854248b3a096be07a6b23c --fork-block-number 16400000 -vvvvv
  */
 contract BalancerBridge is BridgeBase {
     IVault public constant VAULT = IVault(0xBA12222222228d8Ba445958a75a0704d566BF2C8);
