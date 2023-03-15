@@ -1,7 +1,7 @@
 import { AuxDataConfig, AztecAsset, BridgeDataFieldGetters, SolidityType } from "../bridge-data.js";
 import { AssetValue } from "@aztec/barretenberg/asset";
 
-export class BalancerBridgeData implements BridgeDataFieldGetters {
+export class ExampleBridgeData implements BridgeDataFieldGetters {
   constructor() {}
 
   // @dev This function should be implemented for stateful bridges. It should return an array of AssetValue's
