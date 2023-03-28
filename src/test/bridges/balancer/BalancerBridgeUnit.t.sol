@@ -181,7 +181,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
         // Encode the join for further use
-        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
+        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
             amountsIn,
@@ -224,7 +224,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
         // Encode the join for further use
-        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
+        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
             amountsIn,
@@ -267,7 +267,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
         // Encode the join for further use
-        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeDataJoinOrExit(
+        (IVault.Join memory joinPool, , IVault.Convert memory convert) = encodeJoinOrExit(
             IVault.ActionKind.JOIN,
             tokensIn,
             amountsIn,
@@ -318,7 +318,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
         // Encode the exit for further use
-        (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeDataJoinOrExit(
+        (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeJoinOrExit(
             IVault.ActionKind.EXIT,
             tokensIn,
             amountsIn,
@@ -363,7 +363,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
         dealMultiple(tokensIn, address(bridge), amountsIn);
 
         // Encode the exit for further use
-        (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeDataJoinOrExit(
+        (, IVault.Exit memory exitPool, IVault.Convert memory convert) = encodeJoinOrExit(
             IVault.ActionKind.EXIT,
             tokensIn,
             amountsIn,
@@ -399,7 +399,7 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
      * @return exitPool - The exit pool struct
      * @return convert - The convert struct
      */
-    function encodeDataJoinOrExit(
+    function encodeJoinOrExit(
         IVault.ActionKind _actionType,
         address[] memory _tokensIn,
         uint256[] memory _amountsIn,
@@ -446,7 +446,9 @@ contract BalancerBridgeUnitTest is BridgeTestBase {
                 recipient: address(bridge),
                 request: request
             });
+            
         } else {
+
             uint256[] memory minAmountsOut = new uint256[](_tokensOut.length);
             for (uint256 i = 0; i < _tokensOut.length; i++) {
                 minAmountsOut[i] = 0;
