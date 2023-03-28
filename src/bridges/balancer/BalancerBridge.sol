@@ -118,7 +118,7 @@ contract BalancerBridge is BridgeBase {
         actions[auxData] = IVault.ActionKind.BATCHSWAP;
     }
 
-    /** @notice - Executes the JOIN vault action throw the convert(...) function.
+    /** @notice - Executes the JOIN vault action through the convert(...) function.
      *  @param _joinPool - The struct containing the parameters for the vault action
      *  @param _convert - The struct containing the parameters for the convert(...) function
      *  @return outputValueA - The amount of output token A
@@ -141,7 +141,7 @@ contract BalancerBridge is BridgeBase {
         );
     }
 
-    /** @notice - Executes the EXIT vault action throw the convert(...) function.
+    /** @notice - Executes the EXIT vault action through the convert(...) function.
      * @param _exitPool - The struct containing the parameters for the vault action
      * @param _convert - The struct containing the parameters for the convert(...) function
      * @return outputValueA - The amount of output token A
@@ -164,7 +164,7 @@ contract BalancerBridge is BridgeBase {
         );
     }
 
-    /** @notice - Executes the SWAP vault action throw the convert(...) function.
+    /** @notice - Executes the SWAP vault action through the convert(...) function.
      *  @param _swap - The struct containing the parameters for the vault action
      *  @param _convert - The struct containing the parameters for the convert(...) function
      *  @return outputValueA - The amount of output token A
@@ -187,7 +187,7 @@ contract BalancerBridge is BridgeBase {
         );
     }
 
-    /** @notice - Executes the BATCHSWAP vault action throw the convert(...) function.
+    /** @notice - Executes the BATCHSWAP vault action through the convert(...) function.
      *  @param _batchSwap - The struct containing the parameters for the vault action
      *  @param _convert - The struct containing the parameters for the convert(...) function
      *  @return outputValueA - The amount of output token A
